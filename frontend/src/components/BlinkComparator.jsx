@@ -163,6 +163,10 @@ export default function BlinkComparator({
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, width, height);
 
+      // Apply subtle false-color spectral tint in synthetic simulation mode too
+      ctx.fillStyle = `rgba(${spectralTint.r}, ${spectralTint.g}, ${spectralTint.b}, 0.04)`;
+      ctx.fillRect(0, 0, width, height);
+
       // Faint coordinate grid lines
       ctx.strokeStyle = 'rgba(51, 65, 85, 0.25)';
       ctx.lineWidth = 1;
@@ -180,22 +184,24 @@ export default function BlinkComparator({
       }
 
       // Draw real stars from Gaia DR3 catalog (realSpaceData.json)
+      // Mapped relative to current active sector center (ra_center, dec_center)
       if (useGaiaCatalog && realSpaceStars && realSpaceStars.length > 0) {
-        // Coordinate bounds for normalization
-        const minX = 56.71;
-        const maxX = 56.79;
-        const minY = 24.07;
-        const maxY = 24.15;
+        realSpaceStars.forEach((star, sIdx) => {
+          // Offsets computed relative to sector center so stars align across any sky sector
+          const offsetRa = ((star.x - 56.75) * 1.2);
+          const offsetDec = ((star.y - 24.11) * 1.2);
+          const starRa = (sector?.ra_center ?? 150.42) + offsetRa;
+          const starDec = (sector?.dec_center ?? 2.18) + offsetDec;
 
-        realSpaceStars.forEach((star) => {
-          const sx = ((star.x - minX) / (maxX - minX)) * width;
-          const sy = height - ((star.y - minY) / (maxY - minY)) * height;
+          const sx = ((starRa - ((sector?.ra_center ?? 150.42) - 0.2)) / 0.4) * width;
+          const sy = ((starDec - ((sector?.dec_center ?? 2.18) - 0.2)) / 0.4) * height;
+
           // Invert magnitude for display radius: brighter stars have lower magnitude numbers
-          const radius = Math.max(0.8, Math.min(3.5, (22 - star.brightness) * 0.35));
+          const radius = Math.max(0.9, Math.min(3.6, (22 - star.brightness) * 0.35));
 
           ctx.beginPath();
           ctx.arc(sx, sy, radius, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(241, 245, 249, 0.85)';
+          ctx.fillStyle = sIdx % 4 === 0 ? 'rgba(255, 255, 255, 0.95)' : 'rgba(226, 232, 240, 0.85)';
           ctx.shadowColor = '#94a3b8';
           ctx.shadowBlur = 4;
           ctx.fill();
