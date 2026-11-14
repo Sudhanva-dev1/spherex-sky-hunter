@@ -41,7 +41,7 @@ export default function TutorialModal({ isOpen, onClose }) {
 
           {/* Simulated Sky Map Graphics */}
           <div className="relative flex-1 my-2 flex items-center justify-center">
-            <div className="w-48 h-24 rounded-[100%] border border-cyan-500/40 relative flex items-center justify-center bg-radial from-slate-900 to-slate-950">
+            <div className="w-48 h-24 rounded-[100%] border border-cyan-500/40 relative flex items-center justify-center bg-gradient-to-b from-slate-900 to-slate-950">
               {/* Coordinate grid */}
               <div className="absolute inset-x-0 top-1/2 h-px bg-cyan-500/20" />
               <div className="absolute inset-y-0 left-1/2 w-px bg-cyan-500/20" />
