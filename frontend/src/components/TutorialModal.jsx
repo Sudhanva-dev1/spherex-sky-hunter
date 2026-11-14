@@ -195,7 +195,7 @@ export default function TutorialModal({ isOpen, onClose }) {
         {/* Top Progress Gradient Bar */}
         <div className="h-1.5 w-full bg-slate-800">
           <div
-            className={`h-full bg-gradient-to-r ${current.color} transition-all duration-300`}
+            className={`h-full bg-linear-to-r ${current.color} transition-all duration-300`}
             style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
           />
         </div>
@@ -203,7 +203,7 @@ export default function TutorialModal({ isOpen, onClose }) {
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/60">
           <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-lg bg-gradient-to-tr ${current.color} text-slate-950 shadow-md`}>
+            <div className={`p-2 rounded-lg bg-linear-to-tr ${current.color} text-slate-950 shadow-md`}>
               <IconComponent className="w-5 h-5" />
             </div>
             <div>
@@ -289,7 +289,7 @@ export default function TutorialModal({ isOpen, onClose }) {
             {currentStep < steps.length - 1 ? (
               <button
                 onClick={() => setCurrentStep((prev) => prev + 1)}
-                className="flex items-center space-x-1 px-4 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-md transition"
+                className="flex items-center space-x-1 px-4 py-1.5 rounded-lg bg-linear-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-md transition"
               >
                 <span>Next Phase</span>
                 <ChevronRight className="w-4 h-4" />
@@ -297,7 +297,7 @@ export default function TutorialModal({ isOpen, onClose }) {
             ) : (
               <button
                 onClick={onClose}
-                className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white text-xs font-semibold shadow-md transition"
+                className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg bg-linear-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white text-xs font-semibold shadow-md transition"
               >
                 <Crosshair className="w-4 h-4" />
                 <span>Start Hunting</span>
