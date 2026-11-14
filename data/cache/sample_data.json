@@ -1,0 +1,77 @@
+{
+  "status": "cached_offline_fallback",
+  "generated_at": "2026-11-14T00:49:00Z",
+  "mission": "NASA Space Apps Challenge 2026",
+  "telemetry": {
+    "orbit_id": "ORB-2026-X9",
+    "altitude_km": 408.5,
+    "velocity_kms": 7.66,
+    "solar_array_power_kw": 124.8,
+    "battery_charge_pct": 98.2,
+    "cabin_pressure_kpa": 101.3,
+    "cabin_temp_celsius": 21.4
+  },
+  "spatial_coordinates": {
+    "latitude": 28.5721,
+    "longitude": -80.648,
+    "elevation_m": 3.0,
+    "region_name": "Kennedy Space Center / Cape Canaveral",
+    "bounding_box": [-80.75, 28.50, -80.55, 28.65]
+  },
+  "environmental_metrics": [
+    {
+      "timestamp": "2026-11-14T00:00:00Z",
+      "surface_temperature_k": 298.15,
+      "aerosol_optical_depth": 0.12,
+      "carbon_monoxide_ppbv": 98.4,
+      "vegetation_ndvi": 0.68,
+      "soil_moisture_m3m3": 0.24
+    },
+    {
+      "timestamp": "2026-11-14T00:15:00Z",
+      "surface_temperature_k": 298.35,
+      "aerosol_optical_depth": 0.13,
+      "carbon_monoxide_ppbv": 99.1,
+      "vegetation_ndvi": 0.67,
+      "soil_moisture_m3m3": 0.23
+    },
+    {
+      "timestamp": "2026-11-14T00:30:00Z",
+      "surface_temperature_k": 298.60,
+      "aerosol_optical_depth": 0.15,
+      "carbon_monoxide_ppbv": 101.2,
+      "vegetation_ndvi": 0.67,
+      "soil_moisture_m3m3": 0.23
+    },
+    {
+      "timestamp": "2026-11-14T00:45:00Z",
+      "surface_temperature_k": 298.90,
+      "aerosol_optical_depth": 0.14,
+      "carbon_monoxide_ppbv": 100.5,
+      "vegetation_ndvi": 0.68,
+      "soil_moisture_m3m3": 0.22
+    }
+  ],
+  "space_weather": {
+    "solar_flare_class": "M1.2",
+    "geomagnetic_k_index": 3,
+    "solar_wind_speed_kms": 412.0,
+    "proton_flux_pfu": 1.4,
+    "status": "NOMINAL"
+  },
+  "near_earth_objects": [
+    {
+      "id": "2026-AP1",
+      "name": "Asteroid 2026 AP1",
+      "estimated_diameter_meters": {
+        "min": 45.2,
+        "max": 101.5
+      },
+      "is_potentially_hazardous": false,
+      "close_approach_date": "2026-11-18",
+      "miss_distance_km": 1425000.0,
+      "relative_velocity_kph": 38400.0
+    }
+  ]
+}
+
