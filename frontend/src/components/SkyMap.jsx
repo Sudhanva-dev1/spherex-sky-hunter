@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Compass, Globe, Radio, Layers, Search, ExternalLink, Orbit } from 'lucide-react';
+import { Globe, Radio, Navigation } from 'lucide-react';
 
 /**
  * Solves the Mollweide projection auxiliary angle theta using Newton-Raphson:
@@ -94,7 +94,6 @@ export default function SkyMap({ sectors, activeSectorId, onSelectSector }) {
     // Coordinate Grid: Declination Parallels (-60, -30, 0, 30, 60)
     ctx.lineWidth = 0.8;
     ctx.setLineDash([2, 4]);
-    ctx.strokeStyle = 'rgba(51, 65, 85, 0.4)';
     [-60, -30, 0, 30, 60].forEach((dec) => {
       ctx.beginPath();
       if (dec === 0) {
@@ -132,7 +131,6 @@ export default function SkyMap({ sectors, activeSectorId, onSelectSector }) {
     ctx.strokeStyle = 'rgba(245, 158, 11, 0.35)'; // amber
     ctx.lineWidth = 1.2;
     for (let l = 0; l <= 360; l += 5) {
-      // Rough galactic equator mapping
       const bRad = 0;
       const lRad = (l * Math.PI) / 180;
       const decApprox = Math.asin(Math.cos(bRad) * Math.sin(lRad) * Math.sin(0.478) + Math.sin(bRad) * Math.cos(0.478));
@@ -197,17 +195,23 @@ export default function SkyMap({ sectors, activeSectorId, onSelectSector }) {
       ctx.font = isSelected ? 'bold 10px monospace' : '9px monospace';
       ctx.fillText(sec.sector_name.slice(0, 16), bx + 8, by - 6);
     });
-  }, [sectors, activeSectorId, activeTab]);
+  }, [sectors, sectorList, activeSectorId, activeTab]);
+
+  // Switch tab and handle Aladin Lite loading safely
+  const handleTabSwitch = (mode) => {
+    setActiveTab(mode);
+    if (mode === 'aladin') {
+      setAladinStatus('loading');
+    }
+  };
 
   // Aladin Lite v3 dynamic CDN loader (guarded with offline fallback)
   useEffect(() => {
     if (activeTab !== 'aladin') return;
 
     let isMounted = true;
-    setAladinStatus('loading');
-
     const scriptId = 'aladin-lite-v3-script';
-    let script = document.getElementById(scriptId);
+    const script = document.getElementById(scriptId);
 
     const initAladin = () => {
       if (!window.A || !aladinContainerRef.current || !isMounted) return;
@@ -215,7 +219,7 @@ export default function SkyMap({ sectors, activeSectorId, onSelectSector }) {
         aladinContainerRef.current.innerHTML = '';
         window.A.init.then(() => {
           if (!isMounted) return;
-          const aladin = window.A.aladin(aladinContainerRef.current, {
+          window.A.aladin(aladinContainerRef.current, {
             survey: 'P/2MASS/color',
             fov: activeSector?.fov_deg || 3.5,
             target: `${activeSector?.ra_center} ${activeSector?.dec_center}`,
@@ -225,20 +229,20 @@ export default function SkyMap({ sectors, activeSectorId, onSelectSector }) {
         });
       } catch (err) {
         console.warn('Aladin Lite initialization failed:', err);
-        setAladinStatus('error');
+        if (isMounted) setAladinStatus('error');
       }
     };
 
     if (!script) {
-      script = document.createElement('script');
-      script.id = scriptId;
-      script.src = 'https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js';
-      script.async = true;
-      script.onload = () => initAladin();
-      script.onerror = () => {
+      const newScript = document.createElement('script');
+      newScript.id = scriptId;
+      newScript.src = 'https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js';
+      newScript.async = true;
+      newScript.onload = () => initAladin();
+      newScript.onerror = () => {
         if (isMounted) setAladinStatus('error');
       };
-      document.body.appendChild(script);
+      document.body.appendChild(newScript);
     } else if (window.A) {
       initAladin();
     }
@@ -260,7 +264,6 @@ export default function SkyMap({ sectors, activeSectorId, onSelectSector }) {
     const rx = rect.width * 0.46;
     const ry = rect.height * 0.44;
 
-    // Check proximity to any sector beacon
     let closestSector = null;
     let minDistance = 25; // 25px radius
 
@@ -286,8 +289,19 @@ export default function SkyMap({ sectors, activeSectorId, onSelectSector }) {
     const r = parseFloat(customRa);
     const d = parseFloat(customDec);
     if (!isNaN(r) && !isNaN(d)) {
-      // Find nearest or select closest
-      onSelectSector(sectorList[0]?.sector_id);
+      // Find nearest sector to requested coordinates
+      let closest = sectorList[0];
+      let minAng = Infinity;
+      sectorList.forEach((sec) => {
+        const ang = Math.hypot(sec.ra_center - r, sec.dec_center - d);
+        if (ang < minAng) {
+          minAng = ang;
+          closest = sec;
+        }
+      });
+      if (closest) {
+        onSelectSector(closest.sector_id);
+      }
     }
   };
 
@@ -305,7 +319,7 @@ export default function SkyMap({ sectors, activeSectorId, onSelectSector }) {
         {/* View Mode Toggle */}
         <div className="flex items-center rounded-lg bg-slate-900 border border-slate-700/60 p-0.5">
           <button
-            onClick={() => setActiveTab('canvas')}
+            onClick={() => handleTabSwitch('canvas')}
             className={`px-2 py-1 rounded text-[11px] font-medium transition ${
               activeTab === 'canvas'
                 ? 'bg-cyan-500 text-slate-950 font-bold'
@@ -315,7 +329,7 @@ export default function SkyMap({ sectors, activeSectorId, onSelectSector }) {
             Mollweide All-Sky
           </button>
           <button
-            onClick={() => setActiveTab('aladin')}
+            onClick={() => handleTabSwitch('aladin')}
             className={`px-2 py-1 rounded text-[11px] font-medium transition ${
               activeTab === 'aladin'
                 ? 'bg-cyan-500 text-slate-950 font-bold'
@@ -353,7 +367,7 @@ export default function SkyMap({ sectors, activeSectorId, onSelectSector }) {
                   Network connection to CDS Strasbourg server unavailable. Using native Mollweide canvas.
                 </p>
                 <button
-                  onClick={() => setActiveTab('canvas')}
+                  onClick={() => handleTabSwitch('canvas')}
                   className="mt-3 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded text-xs"
                 >
                   Return to Mollweide Projection
@@ -379,6 +393,34 @@ export default function SkyMap({ sectors, activeSectorId, onSelectSector }) {
           </span>
         </div>
       </div>
+
+      {/* Coordinate Jump Form */}
+      <form onSubmit={handleJump} className="px-3 py-2 bg-slate-950/90 border-t border-slate-800/80 flex items-center space-x-2 text-xs">
+        <span className="text-[10px] font-mono-telemetry text-slate-400 uppercase">Target:</span>
+        <input
+          type="number"
+          step="any"
+          placeholder="RA (0-360)"
+          value={customRa}
+          onChange={(e) => setCustomRa(e.target.value)}
+          className="w-24 bg-slate-900 border border-slate-700/80 rounded px-2 py-0.5 text-[11px] font-mono-telemetry text-slate-200 outline-none focus:border-cyan-400"
+        />
+        <input
+          type="number"
+          step="any"
+          placeholder="Dec (-90-+90)"
+          value={customDec}
+          onChange={(e) => setCustomDec(e.target.value)}
+          className="w-24 bg-slate-900 border border-slate-700/80 rounded px-2 py-0.5 text-[11px] font-mono-telemetry text-slate-200 outline-none focus:border-cyan-400"
+        />
+        <button
+          type="submit"
+          className="flex items-center space-x-1 px-2.5 py-0.5 bg-slate-800 hover:bg-cyan-950/70 hover:text-cyan-300 text-slate-300 border border-slate-700 rounded text-[11px] transition"
+        >
+          <Navigation className="w-3 h-3 text-cyan-400" />
+          <span>Pan</span>
+        </button>
+      </form>
 
       {/* Sector Selection List */}
       <div className="p-3 border-t border-slate-800 bg-slate-950/60 space-y-2">

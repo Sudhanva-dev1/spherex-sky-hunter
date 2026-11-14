@@ -10,9 +10,9 @@ import {
   CartesianGrid,
   ReferenceLine
 } from 'recharts';
-import { Activity, Flame, ShieldAlert, Sparkles } from 'lucide-react';
+import { Activity, Sparkles } from 'lucide-react';
 
-export default function SpectralGraph({ anomaly, sector }) {
+export default function SpectralGraph({ anomaly, sector: _sector }) {
   // Format 102 channels into recharts-compatible data points
   const chartData = useMemo(() => {
     if (!anomaly || !anomaly.spectrum_102 || !anomaly.spectral_bands_um) {
@@ -123,3 +123,4 @@ export default function SpectralGraph({ anomaly, sector }) {
     </div>
   );
 }
+

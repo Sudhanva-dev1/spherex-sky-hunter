@@ -1,6 +1,6 @@
 /* MEMBER 2: Replace this entire file with your BlinkComparator implementation */
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, FastForward, Crosshair, Layers, ZoomIn, Info } from 'lucide-react';
+import { Play, Pause, Crosshair } from 'lucide-react';
 
 export default function BlinkComparator({
   sector,
@@ -83,7 +83,7 @@ export default function BlinkComparator({
 
     // Draw catalog known objects if enabled
     if (showKnownObjects && sector?.known_objects) {
-      sector.known_objects.forEach((obj, idx) => {
+      sector.known_objects.forEach((obj) => {
         const ox = ((obj.ra - (sector.ra_center - 0.2)) / 0.4) * width;
         const oy = ((obj.dec - (sector.dec_center - 0.2)) / 0.4) * height;
 
@@ -260,3 +260,4 @@ export default function BlinkComparator({
     </div>
   );
 }
+

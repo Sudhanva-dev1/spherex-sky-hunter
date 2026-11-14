@@ -1,14 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Orbit,
-  Radio,
   Search,
-  HelpCircle,
-  Sparkles,
-  Layers,
-  Activity,
-  Flame,
-  Crosshair
+  HelpCircle
 } from 'lucide-react';
 import { MOCK_SECTORS, fetchSectorData } from './data/mockSectors';
 import SkyMap from './components/SkyMap';

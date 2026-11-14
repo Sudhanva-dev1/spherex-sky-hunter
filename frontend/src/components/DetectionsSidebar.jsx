@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   CheckCircle2,
   ThumbsUp,
@@ -7,11 +7,7 @@ import {
   PlusCircle,
   Eye,
   EyeOff,
-  Flame,
-  Orbit,
-  Sparkles,
   Compass,
-  AlertTriangle,
   ChevronDown
 } from 'lucide-react';
 
@@ -29,36 +25,34 @@ export default function DetectionsSidebar({
   const [manualDec, setManualDec] = useState('');
   const [manualType, setManualType] = useState('KBO');
 
-  // Load votes from localStorage on sector change
-  useEffect(() => {
-    if (!sector?.anomalies) return;
-    const loaded = {};
-    sector.anomalies.forEach((anom) => {
-      const stored = localStorage.getItem(`spherex_votes_${anom.anomaly_id}`);
-      if (stored) {
-        try {
-          loaded[anom.anomaly_id] = JSON.parse(stored);
-        } catch (_err) {
-          // ignore corrupted storage
-        }
-      } else {
-        loaded[anom.anomaly_id] = anom.community_votes || { upvotes: 12, downvotes: 1 };
+  // Helper to read vote count with localStorage persistence
+  const getAnomalyVotes = (anom) => {
+    if (votesState[anom.anomaly_id]) {
+      return votesState[anom.anomaly_id];
+    }
+    const stored = localStorage.getItem(`spherex_votes_${anom.anomaly_id}`);
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch {
+        // ignore corrupted storage
       }
-    });
-    setVotesState(loaded);
-  }, [sector]);
+    }
+    return anom.community_votes || { upvotes: 12, downvotes: 1 };
+  };
 
   // Vote handler with localStorage persistence
-  const handleVote = (anomalyId, deltaUp, deltaDown) => {
-    setVotesState((prev) => {
-      const current = prev[anomalyId] || { upvotes: 10, downvotes: 1 };
-      const updated = {
-        upvotes: Math.max(0, current.upvotes + deltaUp),
-        downvotes: Math.max(0, current.downvotes + deltaDown)
-      };
+  const handleVote = (anomalyId, deltaUp, deltaDown, currentVotes) => {
+    const updated = {
+      upvotes: Math.max(0, currentVotes.upvotes + deltaUp),
+      downvotes: Math.max(0, currentVotes.downvotes + deltaDown)
+    };
+    try {
       localStorage.setItem(`spherex_votes_${anomalyId}`, JSON.stringify(updated));
-      return { ...prev, [anomalyId]: updated };
-    });
+    } catch {
+      // ignore storage failure
+    }
+    setVotesState((prev) => ({ ...prev, [anomalyId]: updated }));
   };
 
   // Submit manual flag
@@ -95,7 +89,7 @@ export default function DetectionsSidebar({
       sector_id: sector.sector_id,
       sector_center: { ra: sector.ra_center, dec: sector.dec_center },
       observations: (sector.anomalies || []).map((anom) => {
-        const votes = votesState[anom.anomaly_id] || anom.community_votes || { upvotes: 0, downvotes: 0 };
+        const votes = getAnomalyVotes(anom);
         return {
           permID: anom.anomaly_id,
           provID: anom.designation,
@@ -186,7 +180,7 @@ export default function DetectionsSidebar({
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {(sector?.anomalies || []).map((anom) => {
           const isSelected = selectedAnomaly?.anomaly_id === anom.anomaly_id;
-          const votes = votesState[anom.anomaly_id] || anom.community_votes || { upvotes: 10, downvotes: 1 };
+          const votes = getAnomalyVotes(anom);
           const totalVotes = votes.upvotes + votes.downvotes;
           const upvotePct = totalVotes > 0 ? Math.round((votes.upvotes / totalVotes) * 100) : 50;
 
@@ -249,7 +243,7 @@ export default function DetectionsSidebar({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleVote(anom.anomaly_id, 1, 0);
+                      handleVote(anom.anomaly_id, 1, 0, votes);
                     }}
                     className="flex-1 flex items-center justify-center space-x-1 py-1 rounded bg-slate-800 hover:bg-emerald-950/60 hover:text-emerald-300 text-slate-300 border border-slate-700/60 transition"
                   >
@@ -259,7 +253,7 @@ export default function DetectionsSidebar({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleVote(anom.anomaly_id, 0, 1);
+                      handleVote(anom.anomaly_id, 0, 1, votes);
                     }}
                     className="flex items-center justify-center space-x-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-rose-950/60 hover:text-rose-300 text-slate-400 border border-slate-700/60 transition"
                   >
@@ -350,3 +344,4 @@ export default function DetectionsSidebar({
     </div>
   );
 }
+

@@ -369,8 +369,9 @@ export async function fetchSectorData(sectorId) {
 
     const json = await res.json();
     return { data: json, source: 'live' };
-  } catch (_err) {
+  } catch {
     clearTimeout(timeoutId);
     return { data: fallback, source: 'mock' };
   }
 }
+

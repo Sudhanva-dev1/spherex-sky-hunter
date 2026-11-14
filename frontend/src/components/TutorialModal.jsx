@@ -84,3 +84,4 @@ export default function TutorialModal({ isOpen, onClose }) {
     </div>
   );
 }
+
