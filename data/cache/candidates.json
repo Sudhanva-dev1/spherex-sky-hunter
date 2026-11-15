@@ -1,0 +1,129 @@
+[
+  {
+    "id": "SPX-AST-2026-SP4",
+    "name": "Asteroid 2026-SP4 (Apollo NEO Candidate)",
+    "type": "asteroid",
+    "status": "under_review",
+    "ra": "09h 14m 02.4s",
+    "dec": "+21° 44' 30.1\"",
+    "apparent_magnitude": 16.8,
+    "velocity_kms": 24.6,
+    "apparent_motion": "1.82 arcsec/min",
+    "snr": "26.8 σ",
+    "observation_baseline": "45 minutes",
+    "ecliptic_latitude": "+1.4°",
+    "epoch1": {
+      "x": 160,
+      "y": 270,
+      "timestamp": "2026-11-14T02:15:00Z",
+      "cadence_label": "Epoch 1 (t=0 min)"
+    },
+    "epoch2": {
+      "x": 420,
+      "y": 110,
+      "timestamp": "2026-11-14T03:00:00Z",
+      "cadence_label": "Epoch 2 (t=+45 min)"
+    },
+    "spectral_data": [
+      { "band": "0.75µm (B1)", "flux": 52 },
+      { "band": "1.25µm (B2)", "flux": 64 },
+      { "band": "1.85µm (B3)", "flux": 70 },
+      { "band": "2.40µm (B4)", "flux": 68 },
+      { "band": "3.50µm (B5)", "flux": 58 },
+      { "band": "4.50µm (B6)", "flux": 49 }
+    ],
+    "description": "Fast-moving Solar System asteroid showing a long linear orbital vector across exposures and widely spaced dipole spots in Difference Mode.",
+    "consensus": {
+      "asteroid_votes": 28,
+      "brown_dwarf_votes": 1,
+      "artifact_votes": 0,
+      "total_votes": 29,
+      "consensus_score": 0.965,
+      "status": "HIGH_CONFIDENCE_ASTEROID"
+    }
+  },
+  {
+    "id": "SPX-BD-J1429-1834",
+    "name": "SPHEREx-BD J1429-1834 (Methane T-Dwarf)",
+    "type": "brown_dwarf",
+    "status": "under_review",
+    "ra": "14h 29m 33.1s",
+    "dec": "-18° 34' 12.0\"",
+    "apparent_magnitude": 18.4,
+    "proper_motion": "840 mas/yr (High Proper Motion)",
+    "estimated_distance_pc": 14.2,
+    "temperature_kelvin": 720,
+    "snr": "14.2 σ",
+    "observation_baseline": "6 months (Survey Pass 1 vs Pass 2)",
+    "epoch1": {
+      "x": 300,
+      "y": 190,
+      "timestamp": "2026-05-14T10:00:00Z",
+      "cadence_label": "Epoch 1 (Survey Pass 1)"
+    },
+    "epoch2": {
+      "x": 318,
+      "y": 185,
+      "timestamp": "2026-11-14T10:00:00Z",
+      "cadence_label": "Epoch 2 (Survey Pass 2)"
+    },
+    "spectral_data": [
+      { "band": "0.75µm (B1)", "flux": 4 },
+      { "band": "1.25µm (B2)", "flux": 12 },
+      { "band": "1.85µm (B3)", "flux": 18 },
+      { "band": "2.40µm (B4)", "flux": 28 },
+      { "band": "3.50µm (B5)", "flux": 55 },
+      { "band": "4.50µm (B6)", "flux": 96 }
+    ],
+    "description": "Nearby ultracool T-dwarf in the solar neighborhood. Displays the iconic tight yin-yang dipole in Difference Mode and an extreme 4.5 µm methane emission spike.",
+    "consensus": {
+      "asteroid_votes": 1,
+      "brown_dwarf_votes": 34,
+      "artifact_votes": 1,
+      "total_votes": 36,
+      "consensus_score": 0.944,
+      "status": "HIGH_CONFIDENCE_BROWN_DWARF"
+    }
+  },
+  {
+    "id": "SPX-ART-089-SPIKE",
+    "name": "Artifact SPX-089 (Diffraction / Cosmic Ray Spike)",
+    "type": "artifact",
+    "status": "under_review",
+    "ra": "06h 45m 09.0s",
+    "dec": "-16° 42' 58.0\"",
+    "apparent_magnitude": 15.1,
+    "apparent_motion": "0.0 arcsec (Static)",
+    "snr": "8.1 σ",
+    "observation_baseline": "6 months",
+    "epoch1": {
+      "x": 260,
+      "y": 195,
+      "timestamp": "2026-05-14T10:00:00Z",
+      "cadence_label": "Epoch 1 (Survey Pass 1)"
+    },
+    "epoch2": {
+      "x": 260,
+      "y": 195,
+      "timestamp": "2026-11-14T10:00:00Z",
+      "cadence_label": "Epoch 2 (Survey Pass 2)"
+    },
+    "spectral_data": [
+      { "band": "0.75µm (B1)", "flux": 85 },
+      { "band": "1.25µm (B2)", "flux": 82 },
+      { "band": "1.85µm (B3)", "flux": 80 },
+      { "band": "2.40µm (B4)", "flux": 79 },
+      { "band": "3.50µm (B5)", "flux": 76 },
+      { "band": "4.50µm (B6)", "flux": 75 }
+    ],
+    "description": "Detector optical bleed from saturated neighboring star. Does not show motion between epochs and leaves a chaotic quadrupole blur instead of a clean dipole.",
+    "consensus": {
+      "asteroid_votes": 1,
+      "brown_dwarf_votes": 2,
+      "artifact_votes": 31,
+      "total_votes": 34,
+      "consensus_score": 0.912,
+      "status": "CONFIRMED_ARTIFACT"
+    }
+  }
+]
