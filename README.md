@@ -104,7 +104,67 @@ flowchart TD
 
 ---
 
-## 👥 The 6-Member Squad Protocol (learn.md Alignment)
+## 📐 Mathematical Foundations & Detection Formulas
+
+SPHEREx Sky Hunter couples raw infrared astrometry with difference imaging physics:
+
+### 1. Difference Imaging & Dipole Formation (ZOGY Subtraction)
+To subtract survey epochs without introducing spurious residual artifacts, the difference image $D(x, y)$ is calculated via PSF-matched convolution:
+$$D(x, y) = E_2(x, y) - \kappa \cdot [E_1 * P](x, y)$$
+where:
+* $E_1(x, y), E_2(x, y)$ are the calibrated flux arrays of Epoch 1 and Epoch 2.
+* $P(x, y)$ is the homogenization kernel matching the Point Spread Function (PSF) between epochs.
+* $\kappa$ is the photometric scaling factor $\kappa = \frac{\langle E_2 \rangle}{\langle E_1 \rangle}$.
+* A stationary star produces $D(x, y) \approx 0$ (noise-floor cancellation).
+* A moving source yields a **dipole pair**: a negative crater of $-F_0$ at $(x_1, y_1)$ and a positive crest of $+F_0$ at $(x_2, y_2)$.
+
+### 2. Astrometric Proper Motion & Orbital Velocity
+For two observation sweeps separated by baseline $\Delta t$:
+$$\mu_\alpha = \frac{(\alpha_2 - \alpha_1) \cos \bar{\delta}}{\Delta t}, \quad \mu_\delta = \frac{\delta_2 - \delta_1}{\Delta t}$$
+The total proper motion vector $\mu$ is given by:
+$$\mu = \sqrt{\mu_\alpha^2 + \mu_\delta^2} \quad [\text{arcsec/yr}]$$
+* **Near-Earth Asteroids (NEOs):** High velocity along the ecliptic: $\mu \ge 1.0\,\text{arcsec/min}$.
+* **Kuiper Belt Objects (KBOs):** Orbital drift: $\mu \approx 2 - 5\,\text{arcsec/hr}$.
+* **Ultracool Brown Dwarfs:** Parallactic/proper motion: $\mu \approx 0.2 - 2.5\,\text{arcsec/yr}$.
+
+### 3. 102-Band Spectrophotometric Volatiles Fingerprint
+Each candidate's spectral energy distribution (SED) is evaluated across SPHEREx's 102 NIR channels ($0.75 - 5.0\,\mu\text{m}$):
+$$F(\lambda) = F_{\text{cont}}(\lambda) \cdot \left[1 - \sum_{i} d_i \cdot \exp\left(-\frac{(\lambda - \lambda_{0, i})^2}{2\sigma_i^2}\right)\right]$$
+Diagnostic chemical absorption dips:
+* **Water Ice ($\text{H}_2\text{O}$):** $\lambda_0 = 3.08\,\mu\text{m}$ ($\text{FWHM} \approx 0.25\,\mu\text{m}$) — Outer solar system planetesimals & comets.
+* **Methane ($\text{CH}_4$):** $\lambda_0 = 3.31\,\mu\text{m}$ & $1.66\,\mu\text{m}$ — Substellar T/Y brown dwarf atmospheres.
+* **Carbon Dioxide Ice ($\text{CO}_2$):** $\lambda_0 = 4.267\,\mu\text{m}$ — Cometary comae and icy interstellar grains.
+* **Carbon Monoxide ($\text{CO}$):** $\lambda_0 = 4.67\,\mu\text{m}$ — Protostellar envelope outgassing.
+
+### 4. Bayesian Consensus & Community Verification
+Consensus rate $C$ is computed across independent triple-blind citizen classifications:
+$$C = \frac{V_{\text{confirm}}}{V_{\text{confirm}} + V_{\text{reject}}} \times 100\% \quad \text{for } (V_{\text{confirm}} + V_{\text{reject}}) \ge 3$$
+Candidates with $C \ge 80\%$ and $\text{SNR} \ge 5.0\sigma$ are automatically prioritized for IAU ADES 2.0 submission.
+
+---
+
+## 🌐 Backend REST API Specification & Persistence Layer
+
+The SPHEREx Sky Hunter backend runs on FastAPI (port `8000`) with an automatic built-in fallback HTTP server and persistent SQLite database (`backend/database.db`):
+
+| Method | Endpoint | Description | Return Format |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/health` | Service health status and SQLite database connection state | `{"status": "ok", "service": "...", "database": "online"}` |
+| `GET` | `/api/sector/{sector_id}` | Canonical Sector Data Contract with 102-band anomalies, FITS cutouts & telemetry | `SectorPayload` (JSON) |
+| `GET` | `/api/db/anomalies` | Retrieve SQLite persistent anomaly feed (supports `?sector_id=...` filter) | `{"count": N, "anomalies": [...]}` |
+| `GET` | `/api/db/anomalies/{id}` | Detailed single anomaly record with Gaia DR3 cross-match status and vote tally | Anomaly object (JSON) |
+| `POST` | `/api/db/flag` | Flag new celestial anomaly with automated 5-arcsec Gaia DR3 cone cross-matching | `{"status": "success", "anomaly": {...}}` |
+| `POST` | `/api/db/vote` | Submit persistent community confirmation or rejection (`"up"` or `"down"`) | `{"status": "success", "consensus_percentage": 94}` |
+| `GET` | `/api/export/ades` | Export Minor Planet Center (MPC) IAU ADES 2.0 report (`?format=json` or `?format=xml`) | ADES 2.0 JSON or XML file |
+| `GET` | `/api/targets` | Benchmark SPHEREx observation targets (IRAS 16293, TW Hydrae, HD 209458b, etc.) | Target catalog (JSON) |
+| `GET` | `/api/spectrum/{id}` | 102-band NIR spectrum with labeled volatile absorption features for target | Spectrum payload (JSON) |
+| `GET` | `/api/telemetry` | Spacecraft telemetry, cryocooler temperatures (sub-10K), and survey progression | Telemetry metrics (JSON) |
+| `GET` | `/api/space-weather` | NASA DONKI solar flare and space weather data with offline cache fallback | Space weather records (JSON) |
+| `GET` | `/api/neo` | NASA NeoWs Near-Earth Asteroid feed with offline cache fallback | Asteroid feed (JSON) |
+| `GET` | `/api/fits/sectors` | Survey sectors metadata, FITS file references, and epoch arrays | FITS sectors dictionary (JSON) |
+| `POST` | `/api/fits/normalize` | Render synthetic astronomical FITS cutout array into base64 PNG with noise floor | `{"shape": [...], "image_png_base64": "..."}` |
+
+---
 
 Built under the **NASA Space Apps Challenge 2026 Multi-Agent Squad Protocol**:
 
