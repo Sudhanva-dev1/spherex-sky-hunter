@@ -181,6 +181,8 @@ Built under the **NASA Space Apps Challenge 2026 Multi-Agent Squad Protocol**:
 
 ## 🎬 NASA Space Apps Pitch Deck & Video Demo Script
 
+> 📊 **Official 7-Slide Pitch Deck:** Download the PowerPoint deck at [`presentation/SPHEREx_Sky_Hunter_Presentation.pptx`](presentation/SPHEREx_Sky_Hunter_Presentation.pptx) or view the full slide-by-slide transcription and speaker cues in [`presentation/SLIDES.md`](presentation/SLIDES.md).
+
 ### ⏱️ 30-Second Elevator Pitch
 > *"Every 6 months, NASA's SPHEREx telescope maps the entire sky in 102 infrared colors, revealing cold worlds invisible in ordinary light. But automated pipelines miss faint asteroids and nearby brown dwarfs buried in stellar noise. **SPHEREx Sky Hunter** turns everyday citizens into planetary defenders and cosmic explorers. Through our interactive 'How to Spot a Moving World' guide, anyone can master difference imaging in 60 seconds, spotting asteroids as jumping dots and brown dwarfs as yin-yang dipoles. We don't just visualize NASA data—we crowdsource the discovery of our universe's hidden worlds."*
 
