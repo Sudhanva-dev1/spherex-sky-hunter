@@ -19,11 +19,17 @@ yarn-error.log*
 
 # Python
 __pycache__/
+*.pyc
 *.py[cod]
 *$py.class
 .venv/
 venv/
 ENV/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
 
 # IDE / OS
 .DS_Store

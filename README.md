@@ -22,7 +22,10 @@ spherex-sky-hunter/
 │   │   └── index.css                 # Tailwind CSS v4 styling
 │   └── package.json
 ├── backend/
-│   ├── main.py                       # FastAPI & fallback HTTP server for SPHEREx endpoints
+│   ├── main.py                       # FastAPI & fallback HTTP server with CORS enabled
+│   ├── database.py                   # Member 5 SQLite persistence, Gaia DR3 cross-matcher & ADES 2.0
+│   ├── database.db                   # Persistent SQLite DB (sectors, anomalies, votes_log)
+│   ├── demo_sectors.json             # Demo sectors and multi-epoch synthetic cutouts
 │   ├── api_handler.py                # NASA API fetcher (APOD, DONKI, NeoWs) with offline cache
 │   └── requirements.txt
 ├── data/
@@ -70,7 +73,11 @@ Open `http://localhost:5173` in your browser.
 python backend/main.py
 ```
 
-The backend supports both **FastAPI** (`/api/health`, `/api/targets`, `/api/spectrum/{target_id}`, `/api/telemetry`) and automatically falls back to an internal HTTP server and local cache if external packages or network access are unavailable.
+The backend supports both **FastAPI** (`/api/health`, `/api/sector/{id}`, `/api/db/anomalies`, `/api/db/flag`, `/api/db/vote`, `/api/export/ades`, `/api/targets`, `/api/spectrum/{target_id}`) and automatically falls back to an internal standard library HTTP server if external packages or network access are unavailable.
+
+- **SQLite Citizen Database (`backend/database.db`)**: Auto-seeds survey sectors and candidate anomalies.
+- **Gaia DR3 Cross-Matching**: Automatically verifies whether flagged coordinates are novel candidates or known static stars within a 5-arcsecond radius.
+- **IAU ADES 2.0 Export**: One-click export of citizen discoveries formatted for the Minor Planet Center (MPC) in both JSON and XML standards.
 
 ---
 

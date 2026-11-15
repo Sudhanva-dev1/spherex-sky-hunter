@@ -26,12 +26,43 @@ export default function App() {
   // Fetch sector data whenever activeSectorId changes
   useEffect(() => {
     let isCurrent = true;
-    fetchSectorData(activeSectorId).then(({ data, source }) => {
+    fetchSectorData(activeSectorId).then(async ({ data, source }) => {
       if (!isCurrent) return;
-      setSectorData(data);
+
+      let anomalies = [...(data.anomalies || [])];
+
+      // If connected live, try fetching SQLite anomalies directly
+      if (source === 'live') {
+        try {
+          const dbRes = await fetch(`http://localhost:8000/api/db/anomalies?sector_id=${activeSectorId}`);
+          if (dbRes.ok) {
+            const dbData = await dbRes.json();
+            if (dbData.anomalies && dbData.anomalies.length > 0) {
+              anomalies = dbData.anomalies;
+            }
+          }
+        } catch {
+          // Keep fetched sector anomalies
+        }
+      }
+
+      // Merge offline flagged candidates from localStorage
+      try {
+        const storedFlags = JSON.parse(localStorage.getItem('spherex_user_flags') || '[]');
+        const sectorFlags = storedFlags.filter(
+          (f) => f.sector_id === activeSectorId && !anomalies.some((a) => a.anomaly_id === f.anomaly_id)
+        );
+        anomalies = [...sectorFlags, ...anomalies];
+      } catch {
+        // ignore storage errors
+      }
+
+      const mergedPayload = { ...data, anomalies };
+      setSectorData(mergedPayload);
       setDataSource(source);
-      if (data.anomalies && data.anomalies.length > 0) {
-        setSelectedAnomaly(data.anomalies[0]);
+
+      if (anomalies.length > 0) {
+        setSelectedAnomaly(anomalies[0]);
       } else {
         setSelectedAnomaly(null);
       }
@@ -63,28 +94,72 @@ export default function App() {
     }
   };
 
-  // Flag new coordinate from BlinkComparator or manual form
-  const handleFlagCoordinate = (newAnomaly) => {
-    const customId = `FLAG-${Date.now().toString().slice(-4)}`;
-    const created = {
-      anomaly_id: customId,
-      designation: newAnomaly.designation || `Citizen Candidate ${customId}`,
-      classification: newAnomaly.classification || 'KBO',
+  // Flag new coordinate from BlinkComparator or manual form with SQLite + Gaia DR3 cross-check
+  const handleFlagCoordinate = async (newAnomaly) => {
+    const payload = {
+      sector_id: activeSectorId,
       ra: newAnomaly.ra,
       dec: newAnomaly.dec,
-      proper_motion: { pm_ra: 0.05, pm_dec: -0.02 },
-      positions_by_epoch: [
-        { epoch: 1, ra: newAnomaly.ra - 0.005, dec: newAnomaly.dec + 0.005, date: '2025-02-01' },
-        { epoch: 2, ra: newAnomaly.ra, dec: newAnomaly.dec, date: '2025-08-01' }
-      ],
-      spectrum_102: MOCK_SECTORS.kuiper_belt_04.anomalies[0].spectrum_102,
-      spectral_bands_um: MOCK_SECTORS.kuiper_belt_04.anomalies[0].spectral_bands_um,
-      spectral_features: [{ wavelength_um: 3.1, species: 'Candidate Ice', type: 'absorption' }],
-      magnitude_ab: 23.4,
-      confidence: 0.75,
-      community_votes: { upvotes: 1, downvotes: 0 },
-      flagged_by_user: true
+      classification: newAnomaly.classification || 'KBO',
+      designation: newAnomaly.designation || `Citizen Candidate (${newAnomaly.classification || 'KBO'})`,
+      pm_ra: newAnomaly.pm_ra ?? 0.05,
+      pm_dec: newAnomaly.pm_dec ?? -0.02
     };
+
+    let created = null;
+
+    // 1. Attempt persistent insert via SQLite backend API
+    try {
+      const res = await fetch('http://localhost:8000/api/db/flag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.anomaly) {
+          created = data.anomaly;
+        }
+      }
+    } catch {
+      // Backend offline, fallback to client-side generation
+    }
+
+    // 2. Client-side fallback if backend API is offline
+    if (!created) {
+      const customId = `FLAG-${Date.now().toString().slice(-4)}`;
+      created = {
+        anomaly_id: customId,
+        id: customId,
+        sector_id: activeSectorId,
+        designation: payload.designation,
+        classification: payload.classification,
+        ra: payload.ra,
+        dec: payload.dec,
+        proper_motion: { pm_ra: payload.pm_ra, pm_dec: payload.pm_dec },
+        catalog_status: 'Uncataloged Candidate (Offline)',
+        positions_by_epoch: [
+          { epoch: 1, ra: payload.ra - 0.005, dec: payload.dec + 0.005, date: '2025-02-01' },
+          { epoch: 2, ra: payload.ra, dec: payload.dec, date: '2025-08-01' }
+        ],
+        spectrum_102: MOCK_SECTORS.kuiper_belt_04.anomalies[0].spectrum_102,
+        spectral_bands_um: MOCK_SECTORS.kuiper_belt_04.anomalies[0].spectral_bands_um,
+        spectral_features: [{ wavelength_um: 3.1, species: 'Candidate Ice', type: 'absorption' }],
+        magnitude_ab: 23.4,
+        confidence: 0.75,
+        community_votes: { upvotes: 1, downvotes: 0, consensus_percentage: 100 },
+        flagged_by_user: true
+      };
+    }
+
+    // 3. Save to localStorage for instant offline recovery
+    try {
+      const stored = JSON.parse(localStorage.getItem('spherex_user_flags') || '[]');
+      stored.unshift(created);
+      localStorage.setItem('spherex_user_flags', JSON.stringify(stored.slice(0, 50)));
+    } catch {
+      // ignore storage failure
+    }
 
     setSectorData((prev) => ({
       ...prev,
@@ -170,7 +245,7 @@ export default function App() {
               }`}
             />
             <span className="font-semibold">
-              {dataSource === 'live' ? 'API Connected' : 'Local Simulation Mode'}
+              {dataSource === 'live' ? 'SQLite DB Connected' : 'Local Simulation Mode'}
             </span>
           </div>
 

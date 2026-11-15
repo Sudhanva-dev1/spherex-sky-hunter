@@ -61,9 +61,13 @@ By combining **multi-epoch astrometric blinking**, **image subtraction/differenc
                              (When Local API Server is active)
                                                   v
                       +-------------------------------------------------------+
-                      |              FASTAPI BACKEND & NASA PIPELINE          |
-                      |           (backend/main.py, api_handler.py)           |
+                      |         FASTAPI & SQLITE BACKEND PIPELINE (Member 5)   |
+                      |    (backend/main.py, database.py, api_handler.py)     |
                       +-------------------------------------------------------+
+                      | - SQLite persistent DB (sectors, anomalies, votes_log)|
+                      | - 5-arcsecond Gaia DR3 coordinate cross-matching      |
+                      | - Dynamic Citizen Consensus percentage calculation    |
+                      | - Minor Planet Center (MPC) IAU ADES 2.0 XML & JSON   |
                       | - NASA Open Data & DONKI Solar Weather API            |
                       | - NeoWs Near-Earth Asteroid Feed                      |
                       | - Astropy/Astroquery coordinate cross-matching        |

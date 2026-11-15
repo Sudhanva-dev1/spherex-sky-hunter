@@ -41,18 +41,48 @@ export default function DetectionsSidebar({
     return anom.community_votes || { upvotes: 12, downvotes: 1 };
   };
 
-  // Vote handler with localStorage persistence
-  const handleVote = (anomalyId, deltaUp, deltaDown, currentVotes) => {
+  // Vote handler with SQLite backend + localStorage fallback
+  const handleVote = async (anomalyId, deltaUp, deltaDown, currentVotes) => {
+    const voteType = deltaUp > 0 ? 'up' : 'down';
     const updated = {
       upvotes: Math.max(0, currentVotes.upvotes + deltaUp),
       downvotes: Math.max(0, currentVotes.downvotes + deltaDown)
     };
+
+    // Optimistic local state update + localStorage persistence
     try {
       localStorage.setItem(`spherex_votes_${anomalyId}`, JSON.stringify(updated));
     } catch {
       // ignore storage failure
     }
     setVotesState((prev) => ({ ...prev, [anomalyId]: updated }));
+
+    // Sync persistent vote to SQLite backend
+    try {
+      const res = await fetch('http://localhost:8000/api/db/vote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          anomaly_id: anomalyId,
+          vote: voteType,
+          delta_up: deltaUp,
+          delta_down: deltaDown
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.anomaly?.community_votes) {
+          const serverVotes = {
+            upvotes: data.anomaly.community_votes.upvotes,
+            downvotes: data.anomaly.community_votes.downvotes
+          };
+          localStorage.setItem(`spherex_votes_${anomalyId}`, JSON.stringify(serverVotes));
+          setVotesState((prev) => ({ ...prev, [anomalyId]: serverVotes }));
+        }
+      }
+    } catch {
+      // Offline fallback: already persisted in localStorage
+    }
   };
 
   // Submit manual flag
@@ -74,14 +104,49 @@ export default function DetectionsSidebar({
     setIsFlagFormOpen(false);
   };
 
-  // Export IAU ADES Standard JSON Report
-  const handleExportADES = () => {
+  // Export IAU ADES Standard Report (supports backend SQLite or client-side fallback, JSON or XML)
+  const handleExportADES = async (format = 'json') => {
+    // 1. Attempt export from SQLite backend
+    try {
+      const res = await fetch(`http://localhost:8000/api/export/ades?format=${format}`);
+      if (res.ok) {
+        if (format === 'xml') {
+          const xmlText = await res.text();
+          const blob = new Blob([xmlText], { type: 'application/xml' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `spherex_iau_ades_${sector?.sector_id || 'catalog'}_${Date.now()}.xml`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          return;
+        } else {
+          const jsonReport = await res.json();
+          const blob = new Blob([JSON.stringify(jsonReport, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `spherex_iau_ades_${sector?.sector_id || 'catalog'}_${Date.now()}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          return;
+        }
+      }
+    } catch {
+      // Backend offline: proceed to client-side fallback
+    }
+
+    // 2. Client-side fallback report
     if (!sector) return;
 
     const adesReport = {
       version: "ADES 2.0.0",
       observatory: {
-        mpc_code: "C51", // WISE/NEOWISE / SPHEREx survey platform identifier
+        mpc_code: "C51",
         telescope: "SPHEREx 0.2m All-Sky Spectral Surveyor",
         survey: "SPHEREx ChronoSky Citizen Hunting Pipeline"
       },
@@ -103,6 +168,7 @@ export default function DetectionsSidebar({
           classification: anom.classification,
           apparent_mag_ab: anom.magnitude_ab,
           detection_confidence: anom.confidence,
+          catalog_status: anom.catalog_status || "Citizen Flagged",
           citizen_consensus: {
             upvotes: votes.upvotes,
             downvotes: votes.downvotes,
@@ -203,9 +269,23 @@ export default function DetectionsSidebar({
                     ID: {anom.anomaly_id}
                   </p>
                 </div>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${getBadgeStyle(anom.classification)}`}>
-                  {anom.classification}
-                </span>
+                <div className="flex flex-col items-end space-y-1">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${getBadgeStyle(anom.classification)}`}>
+                    {anom.classification}
+                  </span>
+                  {anom.catalog_status && (
+                    <span
+                      className={`text-[9px] px-1.5 py-0.5 rounded font-mono-telemetry border max-w-[150px] truncate ${
+                        anom.catalog_status.includes('Gaia DR3 Match')
+                          ? 'bg-amber-950/80 text-amber-300 border-amber-600/40'
+                          : 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
+                      }`}
+                      title={anom.catalog_status}
+                    >
+                      {anom.catalog_status}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Astrometric Coordinates */}
@@ -331,15 +411,28 @@ export default function DetectionsSidebar({
         )}
       </div>
 
-      {/* ADES Export Button */}
-      <div className="p-3 bg-slate-950 border-t border-slate-800">
-        <button
-          onClick={handleExportADES}
-          className="w-full flex items-center justify-center space-x-2 py-2 px-3 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg transition"
-        >
-          <Download className="w-3.5 h-3.5" />
-          <span>Export IAU ADES Report (JSON)</span>
-        </button>
+      {/* ADES Export Section */}
+      <div className="p-3 bg-slate-950 border-t border-slate-800 space-y-2">
+        <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono-telemetry">
+          <span>IAU ADES 2.0 EXPORT:</span>
+          <span className="text-cyan-400">MPC Pipeline</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => handleExportADES('json')}
+            className="flex items-center justify-center space-x-1.5 py-2 px-2 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg transition"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>ADES (JSON)</span>
+          </button>
+          <button
+            onClick={() => handleExportADES('xml')}
+            className="flex items-center justify-center space-x-1.5 py-2 px-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-cyan-200 border border-slate-700 text-xs font-semibold rounded-lg shadow-lg transition"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>ADES (XML)</span>
+          </button>
+        </div>
       </div>
     </div>
   );
