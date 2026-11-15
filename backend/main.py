@@ -32,6 +32,24 @@ except ImportError:
         fetch_apod,
     )
 
+try:
+    from fits_processor import (
+        load_demo_sectors,
+        process_fits_array_to_png,
+        generate_synthetic_cutout,
+    )
+except ImportError:
+    try:
+        from backend.fits_processor import (
+            load_demo_sectors,
+            process_fits_array_to_png,
+            generate_synthetic_cutout,
+        )
+    except ImportError:
+        load_demo_sectors = None
+        process_fits_array_to_png = None
+        generate_synthetic_cutout = None
+
 # SPHEREx Observation Targets Catalog
 TARGETS = [
     {
@@ -221,6 +239,39 @@ try:
     def get_neo():
         return fetch_near_earth_objects()
 
+    @app.get("/api/fits/sectors")
+    def get_fits_sectors():
+        if load_demo_sectors:
+            return load_demo_sectors()
+        return {"error": "FITS processor not initialized"}
+
+    @app.get("/api/fits/targets")
+    def get_fits_targets():
+        if load_demo_sectors:
+            sectors = load_demo_sectors()
+            return [
+                {
+                    "id": s["target_id"],
+                    "name": s["name"],
+                    "classification": s["classification"],
+                    "description": s["description"],
+                    "epoch_count": len(s.get("epochs", [])),
+                    "bands_count": len(s.get("spectrum_102_bands", []))
+                }
+                for s in sectors.values()
+            ]
+        return []
+
+    @app.post("/api/fits/normalize")
+    def normalize_cutout(payload: dict = None):
+        if not process_fits_array_to_png or not generate_synthetic_cutout:
+            return {"error": "FITS processor unavailable"}
+        shape = tuple(payload.get("shape", [64, 64])) if payload else (64, 64)
+        seed = int(payload.get("seed", 42)) if payload else 42
+        cutout = generate_synthetic_cutout(shape=shape, seed=seed)
+        png_b64 = process_fits_array_to_png(cutout)
+        return {"shape": shape, "seed": seed, "image_png_base64": png_b64}
+
 except ImportError:
     app = None
 
@@ -259,6 +310,24 @@ def run_fallback_server(port: int = 8000):
                 data = fetch_space_weather_donki("FLR")
             elif path == "/api/neo":
                 data = fetch_near_earth_objects()
+            elif path == "/api/fits/sectors":
+                data = load_demo_sectors() if load_demo_sectors else {"error": "FITS processor unavailable"}
+            elif path == "/api/fits/targets":
+                if load_demo_sectors:
+                    sectors = load_demo_sectors()
+                    data = [
+                        {
+                            "id": s["target_id"],
+                            "name": s["name"],
+                            "classification": s["classification"],
+                            "description": s["description"],
+                            "epoch_count": len(s.get("epochs", [])),
+                            "bands_count": len(s.get("spectrum_102_bands", []))
+                        }
+                        for s in sectors.values()
+                    ]
+                else:
+                    data = []
             else:
                 self.send_response(404)
                 self.end_headers()
@@ -267,6 +336,33 @@ def run_fallback_server(port: int = 8000):
 
             self._set_headers()
             self.wfile.write(json.dumps(data, indent=2).encode('utf-8'))
+
+        def do_POST(self):
+            parsed = urlparse(self.path)
+            path = parsed.path
+            if path == "/api/fits/normalize":
+                content_len = int(self.headers.get('Content-Length', 0))
+                payload = {}
+                if content_len > 0:
+                    try:
+                        post_body = self.rfile.read(content_len)
+                        payload = json.loads(post_body.decode('utf-8'))
+                    except Exception:
+                        pass
+                shape = tuple(payload.get("shape", [64, 64]))
+                seed = int(payload.get("seed", 42))
+                if generate_synthetic_cutout and process_fits_array_to_png:
+                    cutout = generate_synthetic_cutout(shape=shape, seed=seed)
+                    png_b64 = process_fits_array_to_png(cutout)
+                    data = {"shape": shape, "seed": seed, "image_png_base64": png_b64}
+                else:
+                    data = {"error": "FITS processor unavailable"}
+                self._set_headers()
+                self.wfile.write(json.dumps(data, indent=2).encode('utf-8'))
+            else:
+                self.send_response(404)
+                self.end_headers()
+                self.wfile.write(b'{"error": "Not Found"}')
 
     server = HTTPServer(('127.0.0.1', port), APIRequestHandler)
     print(f"SPHEREx Fallback API server running at http://127.0.0.1:{port}")

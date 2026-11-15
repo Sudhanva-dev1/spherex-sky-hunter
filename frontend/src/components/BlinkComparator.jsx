@@ -7,6 +7,7 @@ import {
   Layers
 } from 'lucide-react';
 import realSpaceStars from '../data/realSpaceData.json';
+import demoSectorsData from '../data/demo_sectors.json';
 
 export default function BlinkComparator({
   sector,
@@ -20,8 +21,14 @@ export default function BlinkComparator({
   const [isPlaying, setIsPlaying] = useState(true);
   const [blinkSpeedMs, setBlinkSpeedMs] = useState(700);
 
-  // New Modes: Real FITS images vs Canvas simulation, Difference Imaging, Invert colors
-  const [viewMode, setViewMode] = useState('simulation'); // 'simulation' | 'fits'
+  // Modes: Real FITS images vs Canvas simulation vs Member 4 Astropy Pipeline
+  const [userMode, setUserMode] = useState(null); // null | 'simulation' | 'fits' | 'astropy'
+  const isAstroTarget = Boolean(
+    selectedAnomaly?.astrophysics_pipeline || sector?.telemetry?.survey_mode?.includes('Astropy')
+  );
+  const viewMode = userMode || (isAstroTarget ? 'astropy' : 'simulation');
+  const setViewMode = setUserMode;
+
   const [isDifferenceMode, setIsDifferenceMode] = useState(false);
   const [isInverted, setIsInverted] = useState(false);
   const [useGaiaCatalog] = useState(true);
@@ -29,9 +36,11 @@ export default function BlinkComparator({
   // Image load tracking
   const [imagesLoaded, setImagesLoaded] = useState([false, false, false, false]);
   const [imagesError, setImagesError] = useState(false);
+  const [astroLoaded, setAstroLoaded] = useState([false, false, false, false]);
 
   const canvasRef = useRef(null);
   const imgRefs = useRef([]);
+  const astroImgRefs = useRef([]);
 
   const epochsObserved = sector?.epoch_coverage?.epochs_observed || [
     '2025-02-01',
@@ -68,6 +77,36 @@ export default function BlinkComparator({
       active = false;
     };
   }, []);
+
+  // Preload Astropy FITS cutouts from demo_sectors or anomaly
+  useEffect(() => {
+    let active = true;
+    const cutouts =
+      selectedAnomaly?.cutout_epochs ||
+      sector?.anomalies?.[0]?.cutout_epochs ||
+      demoSectorsData['AST-2026-01']?.epochs ||
+      [];
+
+    if (cutouts.length > 0) {
+      const loadedArr = [false, false, false, false];
+      const imageObjects = [];
+      cutouts.forEach((ep, idx) => {
+        const img = new Image();
+        img.src = ep.image_png_base64;
+        img.onload = () => {
+          if (!active) return;
+          loadedArr[idx] = true;
+          setAstroLoaded([...loadedArr]);
+        };
+        imageObjects.push(img);
+      });
+      astroImgRefs.current = imageObjects;
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [selectedAnomaly, sector]);
 
   // Auto-blink animation loop
   useEffect(() => {
@@ -106,11 +145,15 @@ export default function BlinkComparator({
     ctx.fillRect(0, 0, width, height);
 
     const hasRealImages = imagesLoaded.every(Boolean) && !imagesError;
+    const hasAstroImages = Boolean(astroLoaded[currentEpochIndex] && astroImgRefs.current[currentEpochIndex]);
 
-    // 2. RENDER REAL NASA SKYVIEW FITS IMAGES (If in FITS mode and loaded)
-    if (viewMode === 'fits' && hasRealImages && imgRefs.current[currentEpochIndex]) {
-      const activeImg = imgRefs.current[currentEpochIndex];
-      const epoch1Img = imgRefs.current[0];
+    const isAstroActive = viewMode === 'astropy' && hasAstroImages;
+    const isFitsActive = viewMode === 'fits' && hasRealImages && imgRefs.current[currentEpochIndex];
+
+    // 2. RENDER REAL FITS IMAGES (SkyView or Astropy ZScale Pipeline)
+    if ((isAstroActive || isFitsActive)) {
+      const activeImg = isAstroActive ? astroImgRefs.current[currentEpochIndex] : imgRefs.current[currentEpochIndex];
+      const epoch1Img = isAstroActive ? astroImgRefs.current[0] : imgRefs.current[0];
 
       if (isDifferenceMode && epoch1Img) {
         // True Pixel-Level Difference Imaging Mode:
@@ -325,7 +368,8 @@ export default function BlinkComparator({
     spectralTint,
     useGaiaCatalog,
     imagesLoaded,
-    imagesError
+    imagesError,
+    astroLoaded
   ]);
 
   // Handle canvas clicks: select existing anomaly or flag new coordinate
@@ -374,7 +418,7 @@ export default function BlinkComparator({
 
         {/* Center: Mode Toggles (FITS vs Simulation, Difference Mode, Invert Colors) */}
         <div className="flex items-center space-x-1.5 font-mono-telemetry text-[11px]">
-          {/* Mode Switch: Simulation vs Real FITS Cutouts */}
+          {/* Mode Switch: Simulation vs Real FITS Cutouts vs Astropy Pipeline */}
           <div className="flex items-center rounded-lg bg-slate-900 border border-slate-700/60 p-0.5">
             <button
               onClick={() => setViewMode('simulation')}
@@ -384,7 +428,7 @@ export default function BlinkComparator({
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Gaia Simulation
+              Gaia Sim
             </button>
             <button
               onClick={() => setViewMode('fits')}
@@ -395,7 +439,18 @@ export default function BlinkComparator({
               }`}
               title="NASA SkyView Real Optical/Infrared FITS Cutouts"
             >
-              NASA SkyView FITS
+              SkyView FITS
+            </button>
+            <button
+              onClick={() => setViewMode('astropy')}
+              className={`px-2 py-0.5 rounded text-[10px] font-medium transition ${
+                viewMode === 'astropy'
+                  ? 'bg-cyan-500 text-slate-950 font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Member 4 Astropy ZScale + Asinh Cutouts"
+            >
+              Astropy FITS
             </button>
           </div>
 
@@ -505,6 +560,13 @@ export default function BlinkComparator({
             <span>|</span>
             <span className="text-cyan-400">TINT: {spectralTint.label}</span>
           </div>
+
+          {viewMode === 'astropy' && (
+            <div className="px-2 py-0.5 rounded bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-[10px] flex items-center space-x-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span>Astropy ZScale + Asinh (Member 4)</span>
+            </div>
+          )}
         </div>
 
         {/* Difference Mode Status Overlay */}

@@ -1,3 +1,5 @@
+import demoSectorsData from './demo_sectors.json';
+
 /**
  * SPHEREx ChronoSky - Mock Sectors & API Client
  * Adheres strictly to the Section A Canonical JSON Data Contract.
@@ -345,6 +347,119 @@ export const MOCK_SECTORS = {
     }
   }
 };
+
+/**
+ * Builds canonical sector structures from Member 4's demo_sectors.json
+ */
+function buildAstrophysicsSectors(rawBundle) {
+  const sectors = {};
+  if (!rawBundle) return sectors;
+
+  for (const [key, target] of Object.entries(rawBundle)) {
+    const slug = key.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const wlArray = target.spectrum_102_bands?.map((b) => b.wavelength_um) || WAVELENGTH_CENTERS_102;
+    const fluxArray = target.spectrum_102_bands?.map((b) => b.flux_mjy) || generateSpectrum(target.classification);
+
+    let features = [];
+    if (target.classification === 'Comet') {
+      features = [
+        { wavelength_um: 2.01, species: 'H2O Ice (2.01μm)', type: 'absorption' },
+        { wavelength_um: 3.00, species: 'H2O Ice (3.00μm)', type: 'absorption' }
+      ];
+    } else if (target.classification === 'Brown Dwarf') {
+      features = [
+        { wavelength_um: 1.65, species: 'Methane CH4 (1.65μm)', type: 'absorption' },
+        { wavelength_um: 2.20, species: 'Methane CH4 (2.20μm)', type: 'absorption' }
+      ];
+    } else if (target.classification === 'Kuiper Belt Object') {
+      features = [
+        { wavelength_um: 2.27, species: 'Hydrocarbon (2.27μm)', type: 'absorption' }
+      ];
+    } else {
+      features = [
+        { wavelength_um: 1.60, species: 'Silicate (1.60μm)', type: 'absorption' }
+      ];
+    }
+
+    const positions = (target.epochs || []).map((ep) => ({
+      epoch: ep.epoch,
+      ra: ep.ra,
+      dec: ep.dec,
+      date: `2025-0${ep.epoch * 3}-01`,
+      mjd: ep.mjd,
+      image_png_base64: ep.image_png_base64
+    }));
+
+    const sectorObj = {
+      sector_id: slug,
+      target_id: key,
+      sector_name: `${target.name} (${key})`,
+      ra_center: target.epochs?.[0]?.ra ?? 142.23,
+      dec_center: target.epochs?.[0]?.dec ?? 23.41,
+      fov_deg: 0.25,
+      epoch_coverage: {
+        current_epoch: 4,
+        total_epochs: 4,
+        cadence_months: 3,
+        mission_start: '2025-01-15',
+        epochs_observed: ['2025-01-15', '2025-04-15', '2025-07-15', '2025-10-15']
+      },
+      anomalies: [
+        {
+          anomaly_id: key,
+          designation: `${target.name} [FITS Pipeline]`,
+          classification: target.classification,
+          ra: target.epochs?.[0]?.ra ?? 142.23,
+          dec: target.epochs?.[0]?.dec ?? 23.41,
+          proper_motion: {
+            pm_ra: 0.002,
+            pm_dec: 0.001
+          },
+          positions_by_epoch: positions,
+          cutout_epochs: target.epochs || [],
+          spectrum_102: fluxArray,
+          spectral_bands_um: wlArray,
+          spectral_features: features,
+          magnitude_ab: target.classification === 'Asteroid' ? 17.5 : 21.0,
+          confidence: 0.98,
+          community_votes: { upvotes: 68, downvotes: 1 },
+          flagged_by_user: false,
+          astrophysics_pipeline: true,
+          description: target.description
+        }
+      ],
+      known_objects: [
+        {
+          catalog: 'Astropy FITS',
+          object_id: `REF-${key}`,
+          name: `${target.name} Reference`,
+          ra: (target.epochs?.[0]?.ra ?? 142.23) + 0.012,
+          dec: (target.epochs?.[0]?.dec ?? 23.41) - 0.010,
+          object_type: 'star',
+          magnitude: 14.5
+        }
+      ],
+      telemetry: {
+        spectral_resolution_range: [40, 130],
+        wavelength_range_um: [0.75, 5.0],
+        total_bands: 102,
+        survey_mode: 'Astropy ZScale FITS Pipeline',
+        normalization: 'ZScaleInterval + AsinhStretch'
+      }
+    };
+
+    sectors[slug] = sectorObj;
+    sectors[key] = sectorObj; // allow lookup by key e.g. AST-2026-01
+  }
+
+  return sectors;
+}
+
+// Merge demo_sectors.json into MOCK_SECTORS
+const astroSectors = buildAstrophysicsSectors(demoSectorsData);
+Object.assign(MOCK_SECTORS, astroSectors);
+
+export { demoSectorsData };
 
 /**
  * Robust async fetcher that queries backend API with a 1.5s timeout.

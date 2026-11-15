@@ -428,7 +428,7 @@ export default function SkyMap({ sectors, activeSectorId, onSelectSector }) {
           <span>Target Sky Sectors ({sectorList.length})</span>
           <span className="font-mono-telemetry text-cyan-400">0.75 - 5.0 μm</span>
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
           {sectorList.map((sec) => {
             const isSelected = sec.sector_id === activeSectorId;
             return (
