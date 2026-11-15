@@ -1,4 +1,4 @@
-# SPHEREx Sky Hunter 🔭🌌
+﻿# SPHEREx Sky Hunter 🔭🌌
 ### NASA Space Apps Challenge 2026
 **"How to Spot a Moving World" — Infrared Transient & Moving Object Citizen Science Platform**
 

@@ -1,4 +1,4 @@
-# SPHEREx Sky Hunter: System Architecture & Technical Specification
+﻿# SPHEREx Sky Hunter: System Architecture & Technical Specification
 
 > **NASA Space Apps Challenge 2026**  
 > **Mission Focus:** High-Cadence Infrared Transient & Moving Object Citizen Science Platform  

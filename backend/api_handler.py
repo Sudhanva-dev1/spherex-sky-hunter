@@ -11,7 +11,10 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
-import requests
+try:
+    import requests
+except ImportError:
+    requests = None
 try:
     from dotenv import load_dotenv
     load_dotenv()
