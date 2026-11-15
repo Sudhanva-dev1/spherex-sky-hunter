@@ -391,7 +391,7 @@ function buildAstrophysicsSectors(rawBundle) {
     }));
 
     const sectorObj = {
-      sector_id: slug,
+      sector_id: key,
       target_id: key,
       sector_name: `${target.name} (${key})`,
       ra_center: target.epochs?.[0]?.ra ?? 142.23,
@@ -407,6 +407,8 @@ function buildAstrophysicsSectors(rawBundle) {
       anomalies: [
         {
           anomaly_id: key,
+          id: key,
+          sector_id: key,
           designation: `${target.name} [FITS Pipeline]`,
           classification: target.classification,
           ra: target.epochs?.[0]?.ra ?? 142.23,
@@ -448,8 +450,8 @@ function buildAstrophysicsSectors(rawBundle) {
       }
     };
 
-    sectors[slug] = sectorObj;
-    sectors[key] = sectorObj; // allow lookup by key e.g. AST-2026-01
+    sectors[key] = sectorObj; // Canonical key e.g. AST-2026-01
+    sectors[slug] = sectorObj; // lowercase slug alias
   }
 
   return sectors;
@@ -468,12 +470,17 @@ export { demoSectorsData };
  * @returns {Promise<{ data: typeof MOCK_SECTORS[string], source: 'live' | 'mock' }>}
  */
 export async function fetchSectorData(sectorId) {
-  const fallback = MOCK_SECTORS[sectorId] || MOCK_SECTORS.kuiper_belt_04;
+  const normId = sectorId || 'kuiper_belt_04';
+  const fallback =
+    MOCK_SECTORS[normId] ||
+    MOCK_SECTORS[normId.toLowerCase()] ||
+    MOCK_SECTORS[normId.toUpperCase()] ||
+    MOCK_SECTORS.kuiper_belt_04;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 1500);
 
   try {
-    const res = await fetch(`http://localhost:8000/api/sector/${sectorId}`, {
+    const res = await fetch(`http://localhost:8000/api/sector/${normId}`, {
       signal: controller.signal
     });
     clearTimeout(timeoutId);

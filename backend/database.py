@@ -492,12 +492,42 @@ def row_to_anomaly_dict(row: sqlite3.Row) -> Dict[str, Any]:
     }
 
 
+def get_all_sectors() -> List[Dict[str, Any]]:
+    """Retrieves all survey sectors stored in SQLite."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM sectors ORDER BY created_at ASC")
+    rows = cur.fetchall()
+    sectors = []
+    for r in rows:
+        epoch_data = {}
+        if r["epoch_data_json"]:
+            try:
+                epoch_data = json.loads(r["epoch_data_json"])
+            except Exception:
+                pass
+        sectors.append({
+            "sector_id": r["sector_id"],
+            "sector_name": r["sector_name"],
+            "ra_center": r["ra_center"],
+            "dec_center": r["dec_center"],
+            "fov_deg": r["fov_deg"] or 3.5,
+            "epoch_coverage": epoch_data
+        })
+    conn.close()
+    return sectors
+
+
 def get_all_anomalies(sector_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Retrieves anomalies, optionally filtered by sector_id."""
+    """Retrieves anomalies, optionally filtered by sector_id with case-insensitivity."""
     conn = get_db_connection()
     cur = conn.cursor()
     if sector_id:
-        cur.execute("SELECT * FROM anomalies WHERE sector_id = ? ORDER BY created_at DESC", (sector_id,))
+        alt_id = sector_id.replace("_", "-") if "_" in sector_id else sector_id.replace("-", "_")
+        cur.execute(
+            "SELECT * FROM anomalies WHERE (sector_id = ? COLLATE NOCASE OR sector_id = ? COLLATE NOCASE) ORDER BY created_at DESC",
+            (sector_id, alt_id)
+        )
     else:
         cur.execute("SELECT * FROM anomalies ORDER BY created_at DESC")
     rows = cur.fetchall()
@@ -509,7 +539,7 @@ def get_anomaly_by_id(anomaly_id: str) -> Optional[Dict[str, Any]]:
     """Retrieves a single anomaly by its unique ID."""
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM anomalies WHERE id = ?", (anomaly_id,))
+    cur.execute("SELECT * FROM anomalies WHERE id = ? COLLATE NOCASE", (anomaly_id,))
     row = cur.fetchone()
     conn.close()
     if row:
@@ -521,11 +551,18 @@ def get_sector_payload(sector_id: str) -> Optional[Dict[str, Any]]:
     """Builds a complete Section A canonical JSON contract payload for a sector."""
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM sectors WHERE sector_id = ?", (sector_id,))
+    cur.execute("SELECT * FROM sectors WHERE sector_id = ? COLLATE NOCASE", (sector_id,))
     sector_row = cur.fetchone()
+    if not sector_row:
+        alt_id = sector_id.replace("_", "-") if "_" in sector_id else sector_id.replace("-", "_")
+        cur.execute("SELECT * FROM sectors WHERE sector_id = ? COLLATE NOCASE", (alt_id,))
+        sector_row = cur.fetchone()
+
     if not sector_row:
         conn.close()
         return None
+
+    actual_sector_id = sector_row["sector_id"]
 
     epoch_data = {}
     if sector_row["epoch_data_json"]:
@@ -534,11 +571,29 @@ def get_sector_payload(sector_id: str) -> Optional[Dict[str, Any]]:
         except Exception:
             pass
 
-    cur.execute("SELECT * FROM anomalies WHERE sector_id = ? ORDER BY created_at DESC", (sector_id,))
+    cur.execute(
+        "SELECT * FROM anomalies WHERE sector_id = ? COLLATE NOCASE ORDER BY created_at DESC",
+        (actual_sector_id,)
+    )
     anomaly_rows = cur.fetchall()
     conn.close()
 
     anomalies = [row_to_anomaly_dict(r) for r in anomaly_rows]
+
+    # Check if target has Astropy FITS cutouts in demo_sectors.json
+    cutout_epochs = []
+    if DEMO_SECTORS_PATH.exists():
+        try:
+            with open(DEMO_SECTORS_PATH, "r", encoding="utf-8") as f:
+                demo_data = json.load(f)
+                matched_target = demo_data.get(actual_sector_id) or demo_data.get(actual_sector_id.upper())
+                if matched_target and "epochs" in matched_target:
+                    cutout_epochs = matched_target["epochs"]
+                    if anomalies:
+                        anomalies[0]["cutout_epochs"] = cutout_epochs
+                        anomalies[0]["astrophysics_pipeline"] = True
+        except Exception:
+            pass
 
     # Load Gaia DR3 known objects for this sector
     known_objects = []
@@ -562,19 +617,20 @@ def get_sector_payload(sector_id: str) -> Optional[Dict[str, Any]]:
             pass
 
     return {
-        "sector_id": sector_row["sector_id"],
+        "sector_id": actual_sector_id,
         "sector_name": sector_row["sector_name"],
         "ra_center": sector_row["ra_center"],
         "dec_center": sector_row["dec_center"],
-        "fov_deg": sector_row["fov_deg"],
+        "fov_deg": sector_row["fov_deg"] or 3.5,
         "epoch_coverage": epoch_data,
+        "epochs": cutout_epochs if cutout_epochs else epoch_data.get("epochs_observed", []),
         "anomalies": anomalies,
         "known_objects": known_objects,
         "telemetry": {
             "spectral_resolution_range": [40, 130],
             "wavelength_range_um": [0.75, 5.0],
             "total_bands": 102,
-            "survey_mode": "all-sky",
+            "survey_mode": "Astropy ZScale FITS Pipeline" if cutout_epochs else "all-sky",
             "orbit": "Sun-synchronous LEO 700km",
             "database_source": "SQLite persistent database.db"
         }

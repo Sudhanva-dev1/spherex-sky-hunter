@@ -55,14 +55,73 @@ export default function SpectralGraph({
   const masterGainRef = useRef(null);
   const scanTimerRef = useRef(null);
 
-  // Unify data from props: anomaly.spectrum_102, customData, or activePreset generator
+  // Derive state reset on anomaly or sector change (React 19 pattern)
+  const currentKey = `${anomaly?.anomaly_id || 'none'}-${_sector?.sector_id || 'none'}`;
+  const [prevKey, setPrevKey] = useState(currentKey);
+  if (prevKey !== currentKey) {
+    setPrevKey(currentKey);
+    if (isPlaying) setIsPlaying(false);
+    if (currentScanIndex !== -1) setCurrentScanIndex(-1);
+    if (selectedBand !== null) setSelectedBand(null);
+  }
+
+  // Unify data from props: anomaly.spectrum_102, anomaly.spectrum, customData, or activePreset generator
   const fullChartData = useMemo(() => {
     if (customData && Array.isArray(customData) && customData.length > 0) {
       return customData;
     }
-    if (anomaly && anomaly.spectrum_102 && anomaly.spectral_bands_um) {
-      return anomaly.spectral_bands_um.map((wl, i) => {
-        const fluxVal = anomaly.spectrum_102[i] ?? 0;
+
+    // Format A: anomaly.spectrum as array of objects [{ wavelength, flux, ... }]
+    if (
+      anomaly &&
+      Array.isArray(anomaly.spectrum) &&
+      anomaly.spectrum.length > 0 &&
+      typeof anomaly.spectrum[0] === 'object' &&
+      anomaly.spectrum[0] !== null
+    ) {
+      return anomaly.spectrum.map((point, i) => {
+        const wl = Number((point.wavelength ?? 0.75 + (i * 4.25) / 101).toFixed(3));
+        const fluxVal = Number((point.flux ?? 50.0).toFixed(4));
+        const detector = getDetectorForWavelength(wl);
+        let detectedFeature = null;
+        for (const feat of HIGHLIGHTED_BANDS) {
+          if (wl >= feat.range[0] && wl <= feat.range[1]) {
+            detectedFeature = feat;
+            break;
+          }
+        }
+        return {
+          bandIndex: point.band_index || i + 1,
+          index: i + 1,
+          wavelength: wl,
+          flux: fluxVal,
+          continuumFlux: Number((fluxVal * 1.15).toFixed(4)),
+          opticalDepth: Number(Math.max(0.01, 1.2 - fluxVal / 100).toFixed(3)),
+          channel: `CH-${(i + 1).toString().padStart(3, '0')}`,
+          resolution_R: Math.round(40 + (i / 101) * 90),
+          feature: point.feature || (detectedFeature ? detectedFeature.name : null),
+          featureId: detectedFeature ? detectedFeature.id : null,
+          featureColor: detectedFeature ? detectedFeature.color : null,
+          detector: detector.name,
+          detectorColor: detector.color
+        };
+      });
+    }
+
+    // Format B: anomaly.spectrum_102 or anomaly.spectrum as array of numbers
+    const rawFluxes =
+      (anomaly && Array.isArray(anomaly.spectrum_102) && anomaly.spectrum_102.length > 0 && anomaly.spectrum_102) ||
+      (anomaly && Array.isArray(anomaly.spectrum) && typeof anomaly.spectrum[0] === 'number' && anomaly.spectrum);
+
+    if (rawFluxes && rawFluxes.length > 0) {
+      const rawWavelengths =
+        (anomaly.spectral_bands_um && anomaly.spectral_bands_um.length === rawFluxes.length && anomaly.spectral_bands_um) ||
+        Array.from({ length: rawFluxes.length }, (_, i) =>
+          Number((0.75 + (i * 4.25) / Math.max(1, rawFluxes.length - 1)).toFixed(3))
+        );
+
+      return rawWavelengths.map((wl, i) => {
+        const fluxVal = Number((rawFluxes[i] ?? 0).toFixed(4));
         const detector = getDetectorForWavelength(wl);
         let detectedFeature = null;
         for (const feat of HIGHLIGHTED_BANDS) {
@@ -75,9 +134,9 @@ export default function SpectralGraph({
           bandIndex: i + 1,
           index: i + 1,
           wavelength: Number(wl.toFixed(3)),
-          flux: Number(fluxVal.toFixed(4)),
+          flux: fluxVal,
           continuumFlux: Number((fluxVal * 1.15).toFixed(4)),
-          opticalDepth: Number(Math.max(0.01, (1.2 - fluxVal / 100)).toFixed(3)),
+          opticalDepth: Number(Math.max(0.01, 1.2 - fluxVal / 100).toFixed(3)),
           channel: `CH-${(i + 1).toString().padStart(3, '0')}`,
           resolution_R: Math.round(40 + (i / 101) * 90),
           feature: detectedFeature ? detectedFeature.name : null,
@@ -88,6 +147,7 @@ export default function SpectralGraph({
         };
       });
     }
+
     return generateSpherex102Bands(activePreset);
   }, [customData, anomaly, activePreset]);
 
@@ -134,7 +194,7 @@ export default function SpectralGraph({
       masterGainRef.current = master;
     }
     if (audioCtxRef.current.state === 'suspended') {
-      audioCtxRef.current.resume();
+      audioCtxRef.current.resume().catch(() => {});
     }
     return audioCtxRef.current;
   }, []);
@@ -240,6 +300,14 @@ export default function SpectralGraph({
       if (scanTimerRef.current) clearInterval(scanTimerRef.current);
     };
   }, [isPlaying, playbackSpeed, fullChartData, playBandTone]);
+
+  // When selected anomaly or sector changes, cleanly clear sonification timer
+  useEffect(() => {
+    if (scanTimerRef.current) {
+      clearInterval(scanTimerRef.current);
+      scanTimerRef.current = null;
+    }
+  }, [anomaly?.anomaly_id, _sector?.sector_id]);
 
   // Cleanup Web Audio nodes on unmount
   useEffect(() => {

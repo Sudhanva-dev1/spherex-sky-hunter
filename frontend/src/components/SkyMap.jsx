@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Globe, Radio, Navigation } from 'lucide-react';
 
 /**
@@ -46,7 +46,16 @@ export default function SkyMap({ sectors, activeSectorId, onSelectSector }) {
   const canvasRef = useRef(null);
   const aladinContainerRef = useRef(null);
 
-  const sectorList = Object.values(sectors || {});
+  const sectorList = useMemo(() => {
+    const map = new Map();
+    Object.values(sectors || {}).forEach((sec) => {
+      if (sec?.sector_id && !map.has(sec.sector_id)) {
+        map.set(sec.sector_id, sec);
+      }
+    });
+    return Array.from(map.values());
+  }, [sectors]);
+
   const activeSector = sectors?.[activeSectorId] || sectorList[0];
 
   // Draw Mollweide Projection Canvas

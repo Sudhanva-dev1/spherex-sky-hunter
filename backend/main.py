@@ -27,6 +27,7 @@ if str(BASE_DIR) not in sys.path:
 try:
     from database import (
         init_db,
+        get_all_sectors,
         get_all_anomalies,
         get_anomaly_by_id,
         get_sector_payload,
@@ -37,6 +38,7 @@ try:
 except ImportError:
     from backend.database import (
         init_db,
+        get_all_sectors,
         get_all_anomalies,
         get_anomaly_by_id,
         get_sector_payload,
@@ -255,6 +257,7 @@ try:
             "endpoints": [
                 "/api/health",
                 "/api/sector/{sector_id}",
+                "/api/db/sectors",
                 "/api/db/anomalies",
                 "/api/db/flag",
                 "/api/db/vote",
@@ -279,6 +282,16 @@ try:
         if payload:
             return payload
         raise HTTPException(status_code=404, detail=f"Sector '{sector_id}' not found")
+
+    # SQLite Persistent Survey Sectors List
+    @app.get("/api/db/sectors")
+    def get_sectors():
+        sectors = get_all_sectors()
+        return {
+            "status": "success",
+            "count": len(sectors),
+            "sectors": sectors
+        }
 
     # SQLite Persistent Citizen Science Detections
     @app.get("/api/db/anomalies")
@@ -441,6 +454,15 @@ def run_fallback_server(port: int = 8000):
                 else:
                     self._set_headers(status_code=404)
                     self.wfile.write(json.dumps({"error": f"Sector '{sector_id}' not found"}).encode('utf-8'))
+            elif path == "/api/db/sectors":
+                sectors = get_all_sectors()
+                data = {
+                    "status": "success",
+                    "count": len(sectors),
+                    "sectors": sectors
+                }
+                self._set_headers()
+                self.wfile.write(json.dumps(data, indent=2).encode('utf-8'))
             elif path == "/api/db/anomalies":
                 sector_id = query.get("sector_id", [None])[0]
                 anomalies = get_all_anomalies(sector_id)

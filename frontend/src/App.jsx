@@ -38,7 +38,10 @@ export default function App() {
           if (dbRes.ok) {
             const dbData = await dbRes.json();
             if (dbData.anomalies && dbData.anomalies.length > 0) {
-              anomalies = dbData.anomalies;
+              anomalies = dbData.anomalies.map((dbAnom) => {
+                const match = (data.anomalies || []).find((a) => a.anomaly_id === dbAnom.anomaly_id);
+                return match ? { ...match, ...dbAnom } : dbAnom;
+              });
             }
           }
         } catch {

@@ -27,6 +27,7 @@ export default function DetectionsSidebar({
 
   // Helper to read vote count with localStorage persistence
   const getAnomalyVotes = (anom) => {
+    if (!anom) return { upvotes: 12, downvotes: 1 };
     if (votesState[anom.anomaly_id]) {
       return votesState[anom.anomaly_id];
     }
@@ -292,8 +293,8 @@ export default function DetectionsSidebar({
               <div className="grid grid-cols-2 gap-1 py-1.5 font-mono-telemetry text-[11px] text-slate-400 border-y border-slate-800/60 my-2">
                 <div>RA: <span className="text-slate-200">{anom.ra}°</span></div>
                 <div>DEC: <span className="text-slate-200">{anom.dec}°</span></div>
-                <div>PM-RA: <span className="text-cyan-400">{anom.proper_motion?.pm_ra ?? '—'}"</span></div>
-                <div>PM-DEC: <span className="text-cyan-400">{anom.proper_motion?.pm_dec ?? '—'}"</span></div>
+                <div>PM-RA: <span className="text-cyan-400">{anom.proper_motion?.pm_ra ?? anom.pm_ra ?? '—'}"</span></div>
+                <div>PM-DEC: <span className="text-cyan-400">{anom.proper_motion?.pm_dec ?? anom.pm_dec ?? '—'}"</span></div>
               </div>
 
               {/* Confidence & Consensus Meter */}

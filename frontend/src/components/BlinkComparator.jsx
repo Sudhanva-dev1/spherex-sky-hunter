@@ -117,6 +117,15 @@ export default function BlinkComparator({
     return () => clearInterval(interval);
   }, [isPlaying, totalEpochs, blinkSpeedMs]);
 
+  // Ensure currentEpochIndex stays in valid bounds when sector/totalEpochs changes
+  const [prevTotalEpochs, setPrevTotalEpochs] = useState(totalEpochs);
+  if (prevTotalEpochs !== totalEpochs) {
+    setPrevTotalEpochs(totalEpochs);
+    if (currentEpochIndex >= totalEpochs) {
+      setCurrentEpochIndex(0);
+    }
+  }
+
   // False-color spectral tint based on activeBandPreset
   const spectralTint = useMemo(() => {
     switch (activeBandPreset) {
@@ -140,9 +149,14 @@ export default function BlinkComparator({
     const width = canvas.width;
     const height = canvas.height;
 
+    const raCenter = sector?.ra_center ?? 150.42;
+    const decCenter = sector?.dec_center ?? 2.18;
+
     // 1. CLEAR VIEWPORT
     ctx.fillStyle = '#020617'; // deep space slate-950
     ctx.fillRect(0, 0, width, height);
+
+    const isImgReady = (img) => Boolean(img && img.complete && img.naturalWidth > 0);
 
     const hasRealImages = imagesLoaded.every(Boolean) && !imagesError;
     const hasAstroImages = Boolean(astroLoaded[currentEpochIndex] && astroImgRefs.current[currentEpochIndex]);
@@ -151,45 +165,45 @@ export default function BlinkComparator({
     const isFitsActive = viewMode === 'fits' && hasRealImages && imgRefs.current[currentEpochIndex];
 
     // 2. RENDER REAL FITS IMAGES (SkyView or Astropy ZScale Pipeline)
-    if ((isAstroActive || isFitsActive)) {
+    if (isAstroActive || isFitsActive) {
       const activeImg = isAstroActive ? astroImgRefs.current[currentEpochIndex] : imgRefs.current[currentEpochIndex];
       const epoch1Img = isAstroActive ? astroImgRefs.current[0] : imgRefs.current[0];
 
-      if (isDifferenceMode && epoch1Img) {
-        // True Pixel-Level Difference Imaging Mode:
-        // Draw active epoch on an offscreen buffer, draw Epoch 1 on another, subtract pixel luminance
-        const offCanvasActive = document.createElement('canvas');
-        offCanvasActive.width = width;
-        offCanvasActive.height = height;
-        const offCtxActive = offCanvasActive.getContext('2d');
-        offCtxActive.drawImage(activeImg, 0, 0, width, height);
+      if (isImgReady(activeImg)) {
+        if (isDifferenceMode && isImgReady(epoch1Img)) {
+          // True Pixel-Level Difference Imaging Mode:
+          const offCanvasActive = document.createElement('canvas');
+          offCanvasActive.width = width;
+          offCanvasActive.height = height;
+          const offCtxActive = offCanvasActive.getContext('2d');
+          offCtxActive.drawImage(activeImg, 0, 0, width, height);
 
-        const offCanvasE1 = document.createElement('canvas');
-        offCanvasE1.width = width;
-        offCanvasE1.height = height;
-        const offCtxE1 = offCanvasE1.getContext('2d');
-        offCtxE1.drawImage(epoch1Img, 0, 0, width, height);
+          const offCanvasE1 = document.createElement('canvas');
+          offCanvasE1.width = width;
+          offCanvasE1.height = height;
+          const offCtxE1 = offCanvasE1.getContext('2d');
+          offCtxE1.drawImage(epoch1Img, 0, 0, width, height);
 
-        const imgDataActive = offCtxActive.getImageData(0, 0, width, height);
-        const imgDataE1 = offCtxE1.getImageData(0, 0, width, height);
-        const diffData = ctx.createImageData(width, height);
+          const imgDataActive = offCtxActive.getImageData(0, 0, width, height);
+          const imgDataE1 = offCtxE1.getImageData(0, 0, width, height);
+          const diffData = ctx.createImageData(width, height);
 
-        for (let i = 0; i < imgDataActive.data.length; i += 4) {
-          // Stationary stars have equal brightness in both epochs, canceling out to zero
-          const diff = Math.abs(imgDataActive.data[i] - imgDataE1.data[i]) * 2.5;
-          diffData.data[i] = Math.min(255, diff * (spectralTint.r / 255));
-          diffData.data[i + 1] = Math.min(255, diff * (spectralTint.g / 255));
-          diffData.data[i + 2] = Math.min(255, diff * (spectralTint.b / 255));
-          diffData.data[i + 3] = 255;
+          for (let i = 0; i < imgDataActive.data.length; i += 4) {
+            const diff = Math.abs(imgDataActive.data[i] - imgDataE1.data[i]) * 2.5;
+            diffData.data[i] = Math.min(255, diff * (spectralTint.r / 255));
+            diffData.data[i + 1] = Math.min(255, diff * (spectralTint.g / 255));
+            diffData.data[i + 2] = Math.min(255, diff * (spectralTint.b / 255));
+            diffData.data[i + 3] = 255;
+          }
+          ctx.putImageData(diffData, 0, 0);
+        } else {
+          // Normal FITS image rendering
+          ctx.drawImage(activeImg, 0, 0, width, height);
+
+          // Apply subtle spectral tinting
+          ctx.fillStyle = `rgba(${spectralTint.r}, ${spectralTint.g}, ${spectralTint.b}, 0.08)`;
+          ctx.fillRect(0, 0, width, height);
         }
-        ctx.putImageData(diffData, 0, 0);
-      } else {
-        // Normal FITS image rendering
-        ctx.drawImage(activeImg, 0, 0, width, height);
-
-        // Apply subtle spectral tinting
-        ctx.fillStyle = `rgba(${spectralTint.r}, ${spectralTint.g}, ${spectralTint.b}, 0.08)`;
-        ctx.fillRect(0, 0, width, height);
       }
     } else {
       // 3. RENDER SYNTHETIC STARFIELD SIMULATION WITH GAIA DR3 DATA
@@ -227,19 +241,17 @@ export default function BlinkComparator({
       }
 
       // Draw real stars from Gaia DR3 catalog (realSpaceData.json)
-      // Mapped relative to current active sector center (ra_center, dec_center)
+      // Mapped relative to current active sector center (raCenter, decCenter)
       if (useGaiaCatalog && realSpaceStars && realSpaceStars.length > 0) {
         realSpaceStars.forEach((star, sIdx) => {
-          // Offsets computed relative to sector center so stars align across any sky sector
           const offsetRa = ((star.x - 56.75) * 1.2);
           const offsetDec = ((star.y - 24.11) * 1.2);
-          const starRa = (sector?.ra_center ?? 150.42) + offsetRa;
-          const starDec = (sector?.dec_center ?? 2.18) + offsetDec;
+          const starRa = raCenter + offsetRa;
+          const starDec = decCenter + offsetDec;
 
-          const sx = ((starRa - ((sector?.ra_center ?? 150.42) - 0.2)) / 0.4) * width;
-          const sy = ((starDec - ((sector?.dec_center ?? 2.18) - 0.2)) / 0.4) * height;
+          const sx = ((starRa - (raCenter - 0.2)) / 0.4) * width;
+          const sy = ((starDec - (decCenter - 0.2)) / 0.4) * height;
 
-          // Invert magnitude for display radius: brighter stars have lower magnitude numbers
           const radius = Math.max(0.9, Math.min(3.6, (22 - star.brightness) * 0.35));
 
           ctx.beginPath();
@@ -250,7 +262,6 @@ export default function BlinkComparator({
           ctx.fill();
         });
       } else {
-        // Fallback procedural seed stars
         const seedStars = [
           { x: 0.22, y: 0.35, r: 2.2 },
           { x: 0.78, y: 0.25, r: 1.8 },
@@ -272,8 +283,8 @@ export default function BlinkComparator({
       // Draw known objects overlay (Gaia DR3 / SIMBAD objects in current sector)
       if (showKnownObjects && sector?.known_objects) {
         sector.known_objects.forEach((obj) => {
-          const ox = ((obj.ra - (sector.ra_center - 0.2)) / 0.4) * width;
-          const oy = ((obj.dec - (sector.dec_center - 0.2)) / 0.4) * height;
+          const ox = ((obj.ra - (raCenter - 0.2)) / 0.4) * width;
+          const oy = ((obj.dec - (decCenter - 0.2)) / 0.4) * height;
 
           ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
           ctx.lineWidth = 1;
@@ -292,14 +303,14 @@ export default function BlinkComparator({
             dec: anom.dec
           };
 
-          const ax = ((epochPos.ra - (sector.ra_center - 0.2)) / 0.4) * width;
-          const ay = ((epochPos.dec - (sector.dec_center - 0.2)) / 0.4) * height;
+          const ax = ((epochPos.ra - (raCenter - 0.2)) / 0.4) * width;
+          const ay = ((epochPos.dec - (decCenter - 0.2)) / 0.4) * height;
 
           if (isDifferenceMode && currentEpochIndex > 0) {
             // Difference dipole rendering: positive peak (cyan) and negative ghost (dark red)
             const epoch1Pos = anom.positions_by_epoch?.[0] || epochPos;
-            const e1x = ((epoch1Pos.ra - (sector.ra_center - 0.2)) / 0.4) * width;
-            const e1y = ((epoch1Pos.dec - (sector.dec_center - 0.2)) / 0.4) * height;
+            const e1x = ((epoch1Pos.ra - (raCenter - 0.2)) / 0.4) * width;
+            const e1y = ((epoch1Pos.dec - (decCenter - 0.2)) / 0.4) * height;
 
             // Ghost of Epoch 1 (negative hole)
             ctx.beginPath();
@@ -375,19 +386,22 @@ export default function BlinkComparator({
   // Handle canvas clicks: select existing anomaly or flag new coordinate
   const handleCanvasClick = (e) => {
     const canvas = canvasRef.current;
-    if (!canvas || !sector) return;
+    if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    const raCenter = sector?.ra_center ?? 150.42;
+    const decCenter = sector?.dec_center ?? 2.18;
+
     const clickedRa = Number(
-      (sector.ra_center - 0.2 + (x / rect.width) * 0.4).toFixed(4)
+      (raCenter - 0.2 + (x / rect.width) * 0.4).toFixed(4)
     );
     const clickedDec = Number(
-      (sector.dec_center - 0.2 + (y / rect.height) * 0.4).toFixed(4)
+      (decCenter - 0.2 + (y / rect.height) * 0.4).toFixed(4)
     );
 
-    const found = sector.anomalies?.find((anom) => {
+    const found = sector?.anomalies?.find((anom) => {
       return (
         Math.abs(anom.ra - clickedRa) < 0.05 &&
         Math.abs(anom.dec - clickedDec) < 0.05
