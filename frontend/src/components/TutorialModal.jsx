@@ -144,7 +144,21 @@ export default function TutorialModal({
   const [inspectedTarget, setInspectedTarget] = useState(null);
   const [completedSteps, setCompletedSteps] = useState({ 1: false, 2: false, 3: false });
   const [dontShowAgain, setDontShowAgain] = useState(false);
-  const [trainingComplete, setTrainingComplete] = useState(false);
+  const [prevInitialStep, setPrevInitialStep] = useState(initialStep);
+
+  // Synchronize initialStep if changed from outside
+  if (prevInitialStep !== initialStep) {
+    setPrevInitialStep(initialStep);
+    if (initialStep >= 1 && initialStep <= 3) {
+      setCurrentStep(initialStep);
+      setInspectedTarget(null);
+    }
+  }
+
+  const goToStep = (step) => {
+    setCurrentStep(step);
+    setInspectedTarget(null);
+  };
 
   // Generate unique IDs for SVG filters and gradients to prevent collisions
   const noiseFilterId = useId();
@@ -152,13 +166,6 @@ export default function TutorialModal({
   const starGlowId = useId();
 
   const stepInfo = STEPS_DATA[currentStep - 1];
-
-  // Synchronize initialStep if changed from outside
-  useEffect(() => {
-    if (initialStep >= 1 && initialStep <= 3) {
-      setCurrentStep(initialStep);
-    }
-  }, [initialStep]);
 
   // Blink comparator timer
   useEffect(() => {
@@ -171,11 +178,6 @@ export default function TutorialModal({
     return () => clearInterval(interval);
   }, [mode, isBlinking, blinkSpeed]);
 
-  // Reset inspected target when changing steps
-  useEffect(() => {
-    setInspectedTarget(null);
-  }, [currentStep]);
-
   // Keyboard navigation & accessibility shortcuts
   const handleKeyDown = useCallback(
     (e) => {
@@ -184,9 +186,9 @@ export default function TutorialModal({
       if (e.key === 'Escape') {
         onClose();
       } else if (e.key === 'ArrowRight' && currentStep < 3) {
-        setCurrentStep((s) => s + 1);
+        goToStep(currentStep + 1);
       } else if (e.key === 'ArrowLeft' && currentStep > 1) {
-        setCurrentStep((s) => s - 1);
+        goToStep(currentStep - 1);
       } else if (e.key === ' ' || e.code === 'Space') {
         e.preventDefault();
         if (mode === 'blink') {
@@ -220,13 +222,12 @@ export default function TutorialModal({
   const handleNextStep = () => {
     setCompletedSteps((prev) => ({ ...prev, [currentStep]: true }));
     if (currentStep < 3) {
-      setCurrentStep(currentStep + 1);
+      goToStep(currentStep + 1);
     } else {
-      setTrainingComplete(true);
       if (dontShowAgain) {
         try {
           localStorage.setItem('spherex_tutorial_completed', 'true');
-        } catch (_) {}
+        } catch {}
       }
       onComplete();
     }
@@ -234,7 +235,7 @@ export default function TutorialModal({
 
   const handlePrevStep = () => {
     if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+      goToStep(currentStep - 1);
     }
   };
 
@@ -303,7 +304,7 @@ export default function TutorialModal({
             return (
               <button
                 key={s.step}
-                onClick={() => setCurrentStep(s.step)}
+                onClick={() => goToStep(s.step)}
                 className={`py-3 px-3 sm:px-4 flex items-center justify-center gap-2 border-b-2 transition-all text-left ${
                   isActive
                     ? 'border-cyan-400 bg-cyan-950/20 text-cyan-300 font-semibold'

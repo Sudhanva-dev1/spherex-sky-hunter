@@ -233,6 +233,7 @@ export default function App() {
       <TutorialModal
         isOpen={isTutorialOpen}
         onClose={() => setIsTutorialOpen(false)}
+        onComplete={() => setIsTutorialOpen(false)}
       />
     </div>
   );
