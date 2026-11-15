@@ -266,11 +266,20 @@ try:
     def normalize_cutout(payload: dict = None):
         if not process_fits_array_to_png or not generate_synthetic_cutout:
             return {"error": "FITS processor unavailable"}
-        shape = tuple(payload.get("shape", [64, 64])) if payload else (64, 64)
-        seed = int(payload.get("seed", 42)) if payload else 42
+        try:
+            raw_shape = payload.get("shape", [64, 64]) if payload else [64, 64]
+            h = max(16, min(512, int(raw_shape[0])))
+            w = max(16, min(512, int(raw_shape[1])))
+            shape = (h, w)
+        except Exception:
+            shape = (64, 64)
+        try:
+            seed = max(0, min(2**31 - 1, int(payload.get("seed", 42)))) if payload else 42
+        except Exception:
+            seed = 42
         cutout = generate_synthetic_cutout(shape=shape, seed=seed)
         png_b64 = process_fits_array_to_png(cutout)
-        return {"shape": shape, "seed": seed, "image_png_base64": png_b64}
+        return {"shape": list(shape), "seed": seed, "image_png_base64": png_b64}
 
 except ImportError:
     app = None
@@ -342,6 +351,7 @@ def run_fallback_server(port: int = 8000):
             path = parsed.path
             if path == "/api/fits/normalize":
                 content_len = int(self.headers.get('Content-Length', 0))
+                content_len = max(0, min(content_len, 1024 * 1024)) # Limit to 1MB max body
                 payload = {}
                 if content_len > 0:
                     try:
@@ -349,12 +359,21 @@ def run_fallback_server(port: int = 8000):
                         payload = json.loads(post_body.decode('utf-8'))
                     except Exception:
                         pass
-                shape = tuple(payload.get("shape", [64, 64]))
-                seed = int(payload.get("seed", 42))
+                try:
+                    raw_shape = payload.get("shape", [64, 64])
+                    h = max(16, min(512, int(raw_shape[0])))
+                    w = max(16, min(512, int(raw_shape[1])))
+                    shape = (h, w)
+                except Exception:
+                    shape = (64, 64)
+                try:
+                    seed = max(0, min(2**31 - 1, int(payload.get("seed", 42))))
+                except Exception:
+                    seed = 42
                 if generate_synthetic_cutout and process_fits_array_to_png:
                     cutout = generate_synthetic_cutout(shape=shape, seed=seed)
                     png_b64 = process_fits_array_to_png(cutout)
-                    data = {"shape": shape, "seed": seed, "image_png_base64": png_b64}
+                    data = {"shape": list(shape), "seed": seed, "image_png_base64": png_b64}
                 else:
                     data = {"error": "FITS processor unavailable"}
                 self._set_headers()

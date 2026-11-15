@@ -254,7 +254,7 @@ export default function TutorialModal({
       {/* Modal Container */}
       <div className="relative w-full max-w-5xl max-h-[92vh] flex flex-col rounded-2xl bg-slate-900 border border-cyan-500/30 shadow-[0_0_50px_rgba(6,182,212,0.18)] text-slate-100 overflow-hidden font-sans">
         {/* Glow Header Accent Line */}
-        <div className="h-1 w-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-amber-500" />
+        <div className="h-1 w-full bg-linear-to-r from-cyan-500 via-indigo-500 to-amber-500" />
 
         {/* Modal Top Bar */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-slate-950/70">
@@ -1001,7 +1001,7 @@ export default function TutorialModal({
 
             <button
               onClick={handleNextStep}
-              className="px-5 py-2 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 transition-all shadow-[0_0_15px_rgba(6,182,212,0.4)] flex items-center gap-1.5"
+              className="px-5 py-2 rounded-xl text-xs font-bold text-slate-950 bg-linear-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 transition-all shadow-[0_0_15px_rgba(6,182,212,0.4)] flex items-center gap-1.5"
             >
               {currentStep < 3 ? (
                 <>

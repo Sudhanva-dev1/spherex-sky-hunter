@@ -30,13 +30,13 @@ export default function DetectionsSidebar({
     if (votesState[anom.anomaly_id]) {
       return votesState[anom.anomaly_id];
     }
-    const stored = localStorage.getItem(`spherex_votes_${anom.anomaly_id}`);
-    if (stored) {
-      try {
+    try {
+      const stored = localStorage.getItem(`spherex_votes_${anom.anomaly_id}`);
+      if (stored) {
         return JSON.parse(stored);
-      } catch {
-        // ignore corrupted storage
       }
+    } catch {
+      // ignore storage failure (e.g. strict privacy/iframe mode)
     }
     return anom.community_votes || { upvotes: 12, downvotes: 1 };
   };
@@ -226,7 +226,7 @@ export default function DetectionsSidebar({
                 </div>
                 <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-cyan-500 to-indigo-500"
+                    className="h-full bg-linear-to-r from-cyan-500 to-indigo-500"
                     style={{ width: `${Math.round((anom.confidence || 0.9) * 100)}%` }}
                   />
                 </div>
@@ -335,7 +335,7 @@ export default function DetectionsSidebar({
       <div className="p-3 bg-slate-950 border-t border-slate-800">
         <button
           onClick={handleExportADES}
-          className="w-full flex items-center justify-center space-x-2 py-2 px-3 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg transition"
+          className="w-full flex items-center justify-center space-x-2 py-2 px-3 bg-linear-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg transition"
         >
           <Download className="w-3.5 h-3.5" />
           <span>Export IAU ADES Report (JSON)</span>

@@ -63,10 +63,21 @@ def process_fits_array_to_png(image_data: np.ndarray) -> str:
 
 def generate_synthetic_cutout(shape=(64, 64), seed=42) -> np.ndarray:
     """Simulates a 2D astronomical FITS cutout with background noise and a moving PSF source."""
-    np.random.seed(seed)
-    background = np.random.normal(loc=100.0, scale=4.0, size=shape)
-    y, x = np.ogrid[:shape[0], :shape[1]]
-    center_y, center_x = shape[0] / 2.0, shape[1] / 2.0
+    try:
+        h = max(16, min(512, int(shape[0])))
+        w = max(16, min(512, int(shape[1])))
+        safe_shape = (h, w)
+    except Exception:
+        safe_shape = (64, 64)
+    try:
+        safe_seed = max(0, min(2**31 - 1, int(seed)))
+    except Exception:
+        safe_seed = 42
+
+    np.random.seed(safe_seed)
+    background = np.random.normal(loc=100.0, scale=4.0, size=safe_shape)
+    y, x = np.ogrid[:safe_shape[0], :safe_shape[1]]
+    center_y, center_x = safe_shape[0] / 2.0, safe_shape[1] / 2.0
     psf = 1500.0 * np.exp(-((x - center_x)**2 + (y - center_y)**2) / (2.0 * 2.2**2))
     return background + psf
 
