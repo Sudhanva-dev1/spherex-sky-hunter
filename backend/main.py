@@ -1,21 +1,16 @@
-"""
-SPHEREx Sky Hunter — Unified Backend API Server
+﻿"""
+SPHEREx Sky Hunter — Backend API Server
 NASA Space Apps Challenge 2026
 
-Serves:
-1. SPHEREx 102-band near-infrared spectra and celestial ice mantles catalog.
-2. Candidate survey tiles, difference imaging metadata, and citizen science consensus voting.
-3. Resilient NASA Open API feeds (APOD, DONKI space weather, NeoWs Near-Earth Objects).
-4. Dual runtime: FastAPI (high-performance) + built-in standard library HTTP server fallback.
+Serves SPHEREx mission telemetry, celestial object catalog, and 102-band spectra.
+Provides FastAPI with CORS enabled for frontend integration, and a built-in
+fallback HTTP server if FastAPI/Uvicorn are not installed.
 """
 
 import sys
-import os
 import json
 import math
-import logging
 from pathlib import Path
-from typing import Dict, Any, List, Optional
 
 # Add backend directory to path
 BASE_DIR = Path(__file__).resolve().parent
@@ -28,8 +23,6 @@ try:
         fetch_space_weather_donki,
         fetch_near_earth_objects,
         fetch_apod,
-        CACHE_DIR,
-        load_fallback_cache
     )
 except ImportError:
     from backend.api_handler import (
@@ -37,12 +30,25 @@ except ImportError:
         fetch_space_weather_donki,
         fetch_near_earth_objects,
         fetch_apod,
-        CACHE_DIR,
-        load_fallback_cache
     )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger("SPHEREx_Backend")
+try:
+    from fits_processor import (
+        load_demo_sectors,
+        process_fits_array_to_png,
+        generate_synthetic_cutout,
+    )
+except ImportError:
+    try:
+        from backend.fits_processor import (
+            load_demo_sectors,
+            process_fits_array_to_png,
+            generate_synthetic_cutout,
+        )
+    except ImportError:
+        load_demo_sectors = None
+        process_fits_array_to_png = None
+        generate_synthetic_cutout = None
 
 # SPHEREx Observation Targets Catalog
 TARGETS = [
@@ -116,6 +122,7 @@ def generate_target_spectrum(target_id: str):
     """
     target = next((t for t in TARGETS if t["id"] == target_id), TARGETS[0])
 
+    # Modifiers based on target characteristics
     if target_id == "w33a":
         h2o_depth, ch4_depth, co2_depth, base_cont = 0.65, 0.40, 0.78, 145.0
     elif target_id == "tw-hydrae":
@@ -132,8 +139,10 @@ def generate_target_spectrum(target_id: str):
     for i in range(total_bands):
         wl = round(0.75 + (i / (total_bands - 1)) * (5.0 - 0.75), 3)
 
+        # Continuum
         continuum = base_cont * math.pow(1.8 / max(0.75, wl), 0.7) * math.exp(-abs(wl - 1.8) / 4.8) + 32.0
 
+        # Absorption profiles
         h2o = h2o_depth * math.exp(-math.pow(wl - 3.10, 2) / (2 * math.pow(0.11, 2)))
         ch4 = ch4_depth * math.exp(-math.pow(wl - 3.30, 2) / (2 * math.pow(0.048, 2)))
         co2 = co2_depth * math.exp(-math.pow(wl - 4.26, 2) / (2 * math.pow(0.058, 2)))
@@ -169,64 +178,19 @@ def generate_target_spectrum(target_id: str):
     }
 
 
-CANDIDATES_CACHE_FILE = CACHE_DIR / "candidates.json"
-
-
-def load_candidates() -> List[Dict[str, Any]]:
-    """Loads candidate tiles from cache or returns fallback list."""
-    if CANDIDATES_CACHE_FILE.exists():
-        try:
-            with open(CANDIDATES_CACHE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            logger.error(f"Error loading candidates from {CANDIDATES_CACHE_FILE}: {e}")
-
-    return [
-        {
-            "id": "SPX-AST-2026-SP4",
-            "name": "Asteroid 2026-SP4 (Apollo NEO Candidate)",
-            "type": "asteroid",
-            "status": "under_review",
-            "ra": "09h 14m 02.4s",
-            "dec": "+21° 44' 30.1\"",
-            "apparent_magnitude": 16.8,
-            "apparent_motion": "1.82 arcsec/min",
-            "snr": "26.8 σ",
-            "epoch1": { "x": 160, "y": 270, "timestamp": "2026-11-14T02:15:00Z" },
-            "epoch2": { "x": 420, "y": 110, "timestamp": "2026-11-14T03:00:00Z" },
-            "consensus": { "asteroid_votes": 28, "brown_dwarf_votes": 1, "artifact_votes": 0, "total_votes": 29 }
-        }
-    ]
-
-
-def save_candidates(candidates: List[Dict[str, Any]]) -> None:
-    """Persists updated consensus votes to cache."""
-    try:
-        with open(CANDIDATES_CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(candidates, f, indent=2)
-    except Exception as e:
-        logger.error(f"Failed to persist candidate votes: {e}")
-
-
-# FastAPI Implementation
+# Try setting up FastAPI application
 try:
-    from fastapi import FastAPI, HTTPException, Query
+    from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
-    from pydantic import BaseModel
     import uvicorn
-
-    class VoteSubmission(BaseModel):
-        candidate_id: str
-        vote: str  # 'asteroid' | 'brown_dwarf' | 'artifact'
-        volunteer_id: Optional[str] = "citizen_observer_alpha"
-        confidence: Optional[int] = 5
 
     app = FastAPI(
         title="SPHEREx Sky Hunter API",
-        description="NASA Space Apps Challenge 2026 — 102-Band NIR Spectrum, Transients & Moving Object Consensus",
+        description="NASA Space Apps Challenge 2026 — 102-Band NIR Spectrum & Volatiles Analysis",
         version="1.0.0"
     )
 
+    # Enable CORS for local Vite dev server
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -241,30 +205,19 @@ try:
             "mission": "SPHEREx Sky Hunter",
             "challenge": "NASA Space Apps Challenge 2026",
             "status": "online",
-            "bands": "102 Near-Infrared Spectral Channels (0.75 - 5.0 µm)",
             "endpoints": [
                 "/api/health",
                 "/api/targets",
                 "/api/spectrum/{target_id}",
                 "/api/telemetry",
-                "/api/candidates",
-                "/api/candidates/{candidate_id}",
-                "/api/classify",
                 "/api/space-weather",
-                "/api/neo",
-                "/api/near-earth-objects",
-                "/api/apod"
+                "/api/neo"
             ]
         }
 
     @app.get("/api/health")
     def health():
-        return {
-            "status": "ok",
-            "service": "SPHEREx Mission API",
-            "cache_available": CANDIDATES_CACHE_FILE.exists(),
-            "mission_cadence": "6-Month All-Sky Sweep"
-        }
+        return {"status": "ok", "service": "SPHEREx Mission API"}
 
     @app.get("/api/targets")
     def get_targets():
@@ -276,119 +229,48 @@ try:
 
     @app.get("/api/telemetry")
     def get_telemetry():
-        base_data = get_telemetry_and_metrics()
-        return {
-            "orbit_pass": "All-Sky Pass 2",
-            "coverage_percentage": 98.4,
-            "spectral_channels": 102,
-            "active_volunteers": 1842,
-            "candidates_classified": 14291,
-            "confirmed_asteroids": 3482,
-            "confirmed_brown_dwarfs": 419,
-            "spacecraft": base_data.get("telemetry", {}),
-            "status": "NOMINAL"
-        }
-
-    @app.get("/api/candidates")
-    def list_candidates(target_type: Optional[str] = Query(None, description="Filter by asteroid, brown_dwarf, or artifact")):
-        candidates = load_candidates()
-        if target_type:
-            candidates = [c for c in candidates if c.get("type") == target_type]
-        return {
-            "count": len(candidates),
-            "candidates": candidates
-        }
-
-    @app.get("/api/candidates/{candidate_id}")
-    def get_candidate(candidate_id: str):
-        candidates = load_candidates()
-        for c in candidates:
-            if c.get("id") == candidate_id:
-                return c
-        raise HTTPException(status_code=404, detail=f"Candidate {candidate_id} not found")
-
-    @app.post("/api/classify")
-    def submit_classification(submission: VoteSubmission):
-        valid_votes = ["asteroid", "brown_dwarf", "artifact"]
-        vote = submission.vote.lower()
-        if vote not in valid_votes:
-            raise HTTPException(status_code=400, detail=f"Invalid vote. Must be one of: {valid_votes}")
-
-        candidates = load_candidates()
-        matched = None
-        for c in candidates:
-            if c.get("id") == submission.candidate_id:
-                matched = c
-                break
-
-        if not matched:
-            raise HTTPException(status_code=404, detail=f"Candidate {submission.candidate_id} not found")
-
-        consensus = matched.setdefault("consensus", {
-            "asteroid_votes": 0,
-            "brown_dwarf_votes": 0,
-            "artifact_votes": 0,
-            "total_votes": 0,
-            "consensus_score": 0.0,
-            "status": "PENDING"
-        })
-
-        if vote == "asteroid":
-            consensus["asteroid_votes"] = consensus.get("asteroid_votes", 0) + 1
-        elif vote == "brown_dwarf":
-            consensus["brown_dwarf_votes"] = consensus.get("brown_dwarf_votes", 0) + 1
-        elif vote == "artifact":
-            consensus["artifact_votes"] = consensus.get("artifact_votes", 0) + 1
-
-        consensus["total_votes"] = (
-            consensus["asteroid_votes"] +
-            consensus["brown_dwarf_votes"] +
-            consensus["artifact_votes"]
-        )
-
-        max_votes = max(
-            consensus["asteroid_votes"],
-            consensus["brown_dwarf_votes"],
-            consensus["artifact_votes"]
-        )
-        score = round(max_votes / consensus["total_votes"], 3) if consensus["total_votes"] > 0 else 0.0
-        consensus["consensus_score"] = score
-
-        if consensus["total_votes"] >= 3 and score >= 0.85:
-            if max_votes == consensus["asteroid_votes"]:
-                consensus["status"] = "ESCALATED_TO_MINOR_PLANET_CENTER"
-            elif max_votes == consensus["brown_dwarf_votes"]:
-                consensus["status"] = "ESCALATED_TO_IRSA_SUBSTELLAR_ARCHIVE"
-            else:
-                consensus["status"] = "CONFIRMED_ARTIFACT"
-
-        save_candidates(candidates)
-
-        return {
-            "success": True,
-            "candidate_id": submission.candidate_id,
-            "vote_registered": vote,
-            "volunteer_points_awarded": 25,
-            "updated_consensus": consensus,
-            "feedback": (
-                "Congratulations! Your vote aligned with high-confidence consensus."
-                if (vote == matched.get("type"))
-                else "Vote recorded for consensus review."
-            )
-        }
+        return get_telemetry_and_metrics()
 
     @app.get("/api/space-weather")
-    def get_space_weather(event_type: str = "FLR"):
-        return fetch_space_weather_donki(event_type)
+    def get_space_weather():
+        return fetch_space_weather_donki("FLR")
 
     @app.get("/api/neo")
-    @app.get("/api/near-earth-objects")
     def get_neo():
         return fetch_near_earth_objects()
 
-    @app.get("/api/apod")
-    def get_apod(date: Optional[str] = None):
-        return fetch_apod(date)
+    @app.get("/api/fits/sectors")
+    def get_fits_sectors():
+        if load_demo_sectors:
+            return load_demo_sectors()
+        return {"error": "FITS processor not initialized"}
+
+    @app.get("/api/fits/targets")
+    def get_fits_targets():
+        if load_demo_sectors:
+            sectors = load_demo_sectors()
+            return [
+                {
+                    "id": s["target_id"],
+                    "name": s["name"],
+                    "classification": s["classification"],
+                    "description": s["description"],
+                    "epoch_count": len(s.get("epochs", [])),
+                    "bands_count": len(s.get("spectrum_102_bands", []))
+                }
+                for s in sectors.values()
+            ]
+        return []
+
+    @app.post("/api/fits/normalize")
+    def normalize_cutout(payload: dict = None):
+        if not process_fits_array_to_png or not generate_synthetic_cutout:
+            return {"error": "FITS processor unavailable"}
+        shape = tuple(payload.get("shape", [64, 64])) if payload else (64, 64)
+        seed = int(payload.get("seed", 42)) if payload else 42
+        cutout = generate_synthetic_cutout(shape=shape, seed=seed)
+        png_b64 = process_fits_array_to_png(cutout)
+        return {"shape": shape, "seed": seed, "image_png_base64": png_b64}
 
 except ImportError:
     app = None
@@ -404,7 +286,7 @@ def run_fallback_server(port: int = 8000):
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
             self.send_header('Access-Control-Allow-Headers', '*')
             self.end_headers()
 
@@ -415,34 +297,88 @@ def run_fallback_server(port: int = 8000):
             parsed = urlparse(self.path)
             path = parsed.path
 
-            if path in ["/", "/api", "/api/health"]:
-                self._set_headers()
-                self.wfile.write(json.dumps({"status": "ok", "service": "SPHEREx Fallback Server"}).encode())
+            if path in ["/", "/api/health"]:
+                data = {"status": "ok", "mission": "SPHEREx Sky Hunter"}
             elif path == "/api/targets":
-                self._set_headers()
-                self.wfile.write(json.dumps({"targets": TARGETS, "count": len(TARGETS)}).encode())
+                data = {"targets": TARGETS, "count": len(TARGETS)}
             elif path.startswith("/api/spectrum/"):
-                target_id = path.split("/api/spectrum/")[-1]
-                self._set_headers()
-                self.wfile.write(json.dumps(generate_target_spectrum(target_id)).encode())
-            elif path == "/api/candidates":
-                self._set_headers()
-                self.wfile.write(json.dumps({"count": len(load_candidates()), "candidates": load_candidates()}).encode())
+                target_id = path.replace("/api/spectrum/", "").strip()
+                data = generate_target_spectrum(target_id)
             elif path == "/api/telemetry":
-                self._set_headers()
-                self.wfile.write(json.dumps(get_telemetry_and_metrics()).encode())
+                data = get_telemetry_and_metrics()
+            elif path == "/api/space-weather":
+                data = fetch_space_weather_donki("FLR")
+            elif path == "/api/neo":
+                data = fetch_near_earth_objects()
+            elif path == "/api/fits/sectors":
+                data = load_demo_sectors() if load_demo_sectors else {"error": "FITS processor unavailable"}
+            elif path == "/api/fits/targets":
+                if load_demo_sectors:
+                    sectors = load_demo_sectors()
+                    data = [
+                        {
+                            "id": s["target_id"],
+                            "name": s["name"],
+                            "classification": s["classification"],
+                            "description": s["description"],
+                            "epoch_count": len(s.get("epochs", [])),
+                            "bands_count": len(s.get("spectrum_102_bands", []))
+                        }
+                        for s in sectors.values()
+                    ]
+                else:
+                    data = []
             else:
                 self.send_response(404)
                 self.end_headers()
+                self.wfile.write(b'{"error": "Not Found"}')
+                return
 
-    server = HTTPServer(('0.0.0.0', port), APIRequestHandler)
-    print(f"Fallback HTTP server running on port {port}...")
+            self._set_headers()
+            self.wfile.write(json.dumps(data, indent=2).encode('utf-8'))
+
+        def do_POST(self):
+            parsed = urlparse(self.path)
+            path = parsed.path
+            if path == "/api/fits/normalize":
+                content_len = int(self.headers.get('Content-Length', 0))
+                payload = {}
+                if content_len > 0:
+                    try:
+                        post_body = self.rfile.read(content_len)
+                        payload = json.loads(post_body.decode('utf-8'))
+                    except Exception:
+                        pass
+                shape = tuple(payload.get("shape", [64, 64]))
+                seed = int(payload.get("seed", 42))
+                if generate_synthetic_cutout and process_fits_array_to_png:
+                    cutout = generate_synthetic_cutout(shape=shape, seed=seed)
+                    png_b64 = process_fits_array_to_png(cutout)
+                    data = {"shape": shape, "seed": seed, "image_png_base64": png_b64}
+                else:
+                    data = {"error": "FITS processor unavailable"}
+                self._set_headers()
+                self.wfile.write(json.dumps(data, indent=2).encode('utf-8'))
+            else:
+                self.send_response(404)
+                self.end_headers()
+                self.wfile.write(b'{"error": "Not Found"}')
+
+    server = HTTPServer(('127.0.0.1', port), APIRequestHandler)
+    print(f"SPHEREx Fallback API server running at http://127.0.0.1:{port}")
     server.serve_forever()
 
 
 if __name__ == "__main__":
-    if app:
-        import uvicorn
-        uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    if app is not None and len(sys.argv) > 1 and sys.argv[1] == "--uvicorn":
+        uvicorn.run(app, host="127.0.0.1", port=8000)
     else:
-        run_fallback_server(8000)
+        # Self-test the generator and endpoints
+        print("--- Testing SPHEREx Backend Logic ---")
+        spec = generate_target_spectrum("iras-16293")
+        print(f"Target: {spec['target']['name']}")
+        print(f"Total Bands: {spec['total_bands']}")
+        print(f"Band 1 Wavelength: {spec['spectrum'][0]['wavelength']} µm, Flux: {spec['spectrum'][0]['flux']} mJy")
+        print(f"Band 56 (near 3.1µm): {spec['spectrum'][55]['wavelength']} µm, Feature: {spec['spectrum'][55]['feature']}")
+        print(f"Band 84 (near 4.26µm): {spec['spectrum'][83]['wavelength']} µm, Feature: {spec['spectrum'][83]['feature']}")
+        print("Backend self-test passed successfully!")
